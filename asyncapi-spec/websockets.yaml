@@ -1,0 +1,251 @@
+asyncapi: 3.0.0
+info:
+  title: Easier Prop WebSocket API
+  version: 1.0.0
+  description: |
+    Real-time WebSocket API for MT5 trading data.
+    Subscribe to channels to receive live quotes, order updates, and profit/equity changes.
+    Supports multi-account streaming on a single connection.
+
+servers:
+  production:
+    host: api.easierprop.com
+    protocol: wss
+    pathname: /ws
+    description: "Production WebSocket server. Pass API key via query: wss://api.easierprop.com/ws?apiKey=sk_your_key"
+    security:
+      - $ref: "#/components/securitySchemes/ApiKeyAuth"
+
+channels:
+  quotes:
+    address: /ws
+    title: "Live Quotes"
+    description: |
+      Real-time bid/ask ticks for subscribed symbols. Updates at the configured interval.
+
+      **Channel name:** `quotes`
+      **Required:** `symbols` array, `account_id`
+      **Default interval:** 500ms
+    messages:
+      subscribe:
+        $ref: "#/components/messages/SubscribeMessage"
+      event:
+        $ref: "#/components/messages/QuoteEvent"
+
+  orders:
+    address: /ws
+    title: "Order Updates"
+    description: |
+      Real-time order events — new fills, modifications, and closures.
+
+      **Channel name:** `orders`
+      **Required:** `account_id`
+    messages:
+      subscribe:
+        $ref: "#/components/messages/SubscribeMessage"
+      event:
+        $ref: "#/components/messages/OrderUpdateEvent"
+
+  profit:
+    address: /ws
+    title: "Profit & Equity"
+    description: |
+      Live equity, profit, margin, and balance updates.
+
+      **Channel name:** `profit`
+      **Required:** `account_id`
+      **Default interval:** 1000ms
+    messages:
+      subscribe:
+        $ref: "#/components/messages/SubscribeMessage"
+      event:
+        $ref: "#/components/messages/ProfitEvent"
+
+operations:
+  subscribeQuotes:
+    action: send
+    channel:
+      $ref: "#/channels/quotes"
+    summary: Subscribe to live quotes
+    messages:
+      - $ref: "#/channels/quotes/messages/subscribe"
+
+  receiveQuotes:
+    action: receive
+    channel:
+      $ref: "#/channels/quotes"
+    summary: Receive quote ticks
+    messages:
+      - $ref: "#/channels/quotes/messages/event"
+
+  subscribeOrders:
+    action: send
+    channel:
+      $ref: "#/channels/orders"
+    summary: Subscribe to order updates
+    messages:
+      - $ref: "#/channels/orders/messages/subscribe"
+
+  receiveOrders:
+    action: receive
+    channel:
+      $ref: "#/channels/orders"
+    summary: Receive order events
+    messages:
+      - $ref: "#/channels/orders/messages/event"
+
+  subscribeProfit:
+    action: send
+    channel:
+      $ref: "#/channels/profit"
+    summary: Subscribe to profit updates
+    messages:
+      - $ref: "#/channels/profit/messages/subscribe"
+
+  receiveProfit:
+    action: receive
+    channel:
+      $ref: "#/channels/profit"
+    summary: Receive profit events
+    messages:
+      - $ref: "#/channels/profit/messages/event"
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: httpApiKey
+      name: apiKey
+      in: query
+      description: "API key passed as query parameter: wss://api.easierprop.com/ws?apiKey=sk_your_key"
+
+  messages:
+    SubscribeMessage:
+      name: subscribe
+      title: Subscribe
+      summary: Subscribe to a channel
+      contentType: application/json
+      payload:
+        type: object
+        required: [type, channel, account_id]
+        properties:
+          type:
+            type: string
+            const: subscribe
+          channel:
+            type: string
+            enum: [quotes, orders, profit]
+            description: Channel to subscribe to
+          account_id:
+            type: string
+            format: uuid
+            description: MT5 account ID
+          symbols:
+            type: array
+            items:
+              type: string
+            description: Required for quotes channel
+            examples:
+              - ["EURUSD", "GBPUSD"]
+          interval_ms:
+            type: integer
+            description: Minimum milliseconds between updates
+            default: 500
+        examples:
+          - type: subscribe
+            channel: quotes
+            account_id: "70f60784-20f1-45ba-9a04-8e01c0b810c3"
+            symbols: ["EURUSD", "GBPUSD"]
+            interval_ms: 500
+
+    QuoteEvent:
+      name: quote
+      title: Quote Tick
+      summary: Real-time bid/ask update
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            const: quote
+          account_id:
+            type: string
+            format: uuid
+          symbol:
+            type: string
+            example: "EURUSD"
+          bid:
+            type: number
+            example: 1.08542
+          ask:
+            type: number
+            example: 1.08544
+          time:
+            type: string
+            example: "2026-04-01T12:30:00Z"
+
+    OrderUpdateEvent:
+      name: order_update
+      title: Order Update
+      summary: Order opened, modified, or closed
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            const: order_update
+          account_id:
+            type: string
+            format: uuid
+          order:
+            type: object
+            properties:
+              ticket:
+                type: integer
+                example: 12345678
+              symbol:
+                type: string
+                example: "EURUSD"
+              type:
+                type: string
+                example: "Buy"
+              volume:
+                type: number
+                example: 0.01
+              openPrice:
+                type: number
+                example: 1.08542
+              profit:
+                type: number
+                example: 3.20
+
+    ProfitEvent:
+      name: profit
+      title: Profit Update
+      summary: Live equity and P&L
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            const: profit
+          account_id:
+            type: string
+            format: uuid
+          balance:
+            type: number
+            example: 10000.00
+          equity:
+            type: number
+            example: 10142.50
+          profit:
+            type: number
+            example: 142.50
+          margin:
+            type: number
+            example: 500.00
+          freeMargin:
+            type: number
+            example: 9642.50

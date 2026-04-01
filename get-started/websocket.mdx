@@ -1,0 +1,285 @@
+---
+title: "WebSocket Guide"
+description: "Real-time quote, order, and profit streaming via WebSocket"
+---
+
+## Connection
+
+```
+wss://api.easierprop.com/ws?apiKey=sk_your_key
+```
+
+## Subscribe to a Channel
+
+Send a JSON message to start streaming:
+
+```json
+{
+  "type": "subscribe",
+  "channel": "quotes",
+  "account_id": "70f60784-20f1-45ba-9a04-8e01c0b810c3",
+  "symbols": ["EURUSD", "GBPUSD"],
+  "interval_ms": 500
+}
+```
+
+**Server confirms:**
+
+```json
+{
+  "type": "subscribed",
+  "channel": "quotes",
+  "account_id": "70f60784-20f1-45ba-9a04-8e01c0b810c3",
+  "symbols": ["EURUSD", "GBPUSD"]
+}
+```
+
+## Receive Events
+
+### Quote Ticks
+
+```json
+{
+  "type": "quote",
+  "account_id": "70f60784-...",
+  "symbol": "EURUSD",
+  "bid": 1.08542,
+  "ask": 1.08544,
+  "time": "2026-04-01T12:30:00Z"
+}
+```
+
+### Order Updates
+
+Sent when an order is opened, modified, or closed:
+
+```json
+{
+  "type": "order_update",
+  "account_id": "70f60784-...",
+  "order": {
+    "ticket": 12345678,
+    "symbol": "EURUSD",
+    "type": "Buy",
+    "volume": 0.01,
+    "openPrice": 1.08542,
+    "profit": 3.20
+  }
+}
+```
+
+### Profit Updates
+
+Live equity and P&L:
+
+```json
+{
+  "type": "profit",
+  "account_id": "70f60784-...",
+  "balance": 10000.00,
+  "equity": 10142.50,
+  "profit": 142.50,
+  "margin": 500.00,
+  "freeMargin": 9642.50
+}
+```
+
+## Unsubscribe
+
+```json
+{
+  "type": "unsubscribe",
+  "channel": "quotes",
+  "account_id": "70f60784-...",
+  "symbols": ["EURUSD"]
+}
+```
+
+Unsubscribe from everything on an account:
+
+```json
+{
+  "type": "unsubscribe_all",
+  "account_id": "70f60784-..."
+}
+```
+
+## Available Channels
+
+| Channel | Description | `symbols` required | `interval_ms` default |
+|---------|-------------|-------------------|----------------------|
+| `quotes` | Real-time bid/ask ticks | yes | 500ms |
+| `orders` | Order open/modify/close events | no | — |
+| `profit` | Live equity and P&L | no | 1000ms |
+
+## Multi-Account Streaming
+
+Subscribe to multiple accounts on the same WebSocket:
+
+```javascript
+// Stream quotes from account A
+ws.send(JSON.stringify({
+  type: "subscribe",
+  channel: "quotes",
+  account_id: "account-a-uuid",
+  symbols: ["EURUSD"]
+}));
+
+// Stream profit from account B
+ws.send(JSON.stringify({
+  type: "subscribe",
+  channel: "profit",
+  account_id: "account-b-uuid",
+  interval_ms: 1000
+}));
+
+// Stream order fills from both
+ws.send(JSON.stringify({
+  type: "subscribe",
+  channel: "orders",
+  account_id: "account-a-uuid"
+}));
+
+ws.send(JSON.stringify({
+  type: "subscribe",
+  channel: "orders",
+  account_id: "account-b-uuid"
+}));
+```
+
+Every message includes `account_id` so you can route it to the correct handler.
+
+## Error Events
+
+```json
+{
+  "type": "error",
+  "code": "SESSION_ERROR",
+  "message": "No active session for this account"
+}
+```
+
+Error codes: `SESSION_ERROR`, `INVALID_MESSAGE`
+
+## Keepalive
+
+```json
+{ "type": "ping" }
+```
+
+```json
+{ "type": "pong" }
+```
+
+## Full JavaScript Example
+
+```javascript
+const ws = new WebSocket("wss://api.easierprop.com/ws?apiKey=sk_your_key");
+
+ws.onopen = () => {
+  console.log("Connected to Easier Prop WebSocket");
+
+  // Stream live quotes
+  ws.send(JSON.stringify({
+    type: "subscribe",
+    channel: "quotes",
+    account_id: "70f60784-20f1-45ba-9a04-8e01c0b810c3",
+    symbols: ["EURUSD", "GBPUSD", "USDJPY"],
+    interval_ms: 500
+  }));
+
+  // Monitor order fills
+  ws.send(JSON.stringify({
+    type: "subscribe",
+    channel: "orders",
+    account_id: "70f60784-20f1-45ba-9a04-8e01c0b810c3"
+  }));
+
+  // Track live P&L
+  ws.send(JSON.stringify({
+    type: "subscribe",
+    channel: "profit",
+    account_id: "70f60784-20f1-45ba-9a04-8e01c0b810c3",
+    interval_ms: 1000
+  }));
+};
+
+ws.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
+
+  switch (msg.type) {
+    case "subscribed":
+      console.log(`Subscribed to ${msg.channel}`);
+      break;
+
+    case "quote":
+      console.log(`${msg.symbol}: ${msg.bid} / ${msg.ask}`);
+      break;
+
+    case "order_update":
+      console.log(`Order ${msg.order.ticket}: ${msg.order.type} ${msg.order.symbol} P&L=${msg.order.profit}`);
+      break;
+
+    case "profit":
+      console.log(`Equity: ${msg.equity} | Profit: ${msg.profit}`);
+      break;
+
+    case "error":
+      console.error(`Error: ${msg.message}`);
+      break;
+  }
+};
+
+ws.onclose = () => console.log("Disconnected");
+```
+
+## Full Python Example
+
+```python
+import asyncio
+import json
+import websockets
+
+API_KEY = "sk_your_key"
+ACCOUNT_ID = "70f60784-20f1-45ba-9a04-8e01c0b810c3"
+
+async def main():
+    uri = f"wss://api.easierprop.com/ws?apiKey={API_KEY}"
+
+    async with websockets.connect(uri) as ws:
+        # Subscribe to quotes
+        await ws.send(json.dumps({
+            "type": "subscribe",
+            "channel": "quotes",
+            "account_id": ACCOUNT_ID,
+            "symbols": ["EURUSD"],
+            "interval_ms": 500
+        }))
+
+        # Subscribe to P&L
+        await ws.send(json.dumps({
+            "type": "subscribe",
+            "channel": "profit",
+            "account_id": ACCOUNT_ID,
+            "interval_ms": 1000
+        }))
+
+        async for message in ws:
+            msg = json.loads(message)
+
+            if msg["type"] == "quote":
+                print(f"{msg['symbol']}: {msg['bid']} / {msg['ask']}")
+            elif msg["type"] == "profit":
+                print(f"Equity: {msg['equity']} | P&L: {msg['profit']}")
+            elif msg["type"] == "error":
+                print(f"Error: {msg['message']}")
+
+asyncio.run(main())
+```
+
+## Session Behavior
+
+- Sessions auto-connect when you subscribe. No need to call `/connect` first.
+- If the MT5 session drops, the gateway reconnects automatically and resumes streaming.
+- On WebSocket disconnect, all subscriptions for that client are cleaned up.
+- Upstream quote subscriptions are ref-counted. Multiple clients on the same symbol share one upstream feed.

@@ -1,0 +1,206 @@
+---
+title: "Quick Start"
+description: "Get up and running with the Easier Prop API in minutes"
+---
+
+## Base URL
+
+```
+https://api.easierprop.com
+```
+
+## Authentication
+
+All requests require an API key. Three methods are supported:
+
+<CodeGroup>
+```bash X-API-Key Header (recommended)
+curl -H "X-API-Key: sk_your_key" "https://api.easierprop.com/api/accounts"
+```
+
+```bash Bearer Token
+curl -H "Authorization: Bearer sk_your_key" "https://api.easierprop.com/api/accounts"
+```
+
+```bash Query Parameter (WebSocket only)
+wss://api.easierprop.com/ws?apiKey=sk_your_key
+```
+</CodeGroup>
+
+## Step 1: Register Your MT5 Account
+
+```bash
+curl -X POST https://api.easierprop.com/api/accounts \
+  -H "X-API-Key: sk_your_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "label": "My Broker Account",
+    "broker_host": "mt5.broker.com",
+    "broker_port": 443,
+    "mt5_login": 51234567,
+    "password": "YourMT5Password"
+  }'
+```
+
+**Response:**
+
+```json
+{
+  "ok": true,
+  "data": {
+    "id": "70f60784-20f1-45ba-9a04-8e01c0b810c3",
+    "label": "My Broker Account",
+    "broker_host": "mt5.broker.com",
+    "broker_port": 443,
+    "mt5_login": 51234567,
+    "is_enabled": true,
+    "auto_connect": false,
+    "session_status": "disconnected",
+    "created_at": "2026-04-01T12:00:00Z",
+    "updated_at": "2026-04-01T12:00:00Z"
+  }
+}
+```
+
+## Step 2: Connect to the Broker
+
+```bash
+curl -X POST https://api.easierprop.com/api/accounts/70f60784-.../connect \
+  -H "X-API-Key: sk_your_key"
+```
+
+**Response:**
+
+```json
+{
+  "ok": true,
+  "data": {
+    "connected": true,
+    "account_id": "70f60784-20f1-45ba-9a04-8e01c0b810c3"
+  }
+}
+```
+
+<Note>You can skip this step. All endpoints auto-connect when needed.</Note>
+
+## Step 3: Check Your Balance
+
+```bash
+curl https://api.easierprop.com/api/accounts/70f60784-.../summary \
+  -H "X-API-Key: sk_your_key"
+```
+
+**Response:**
+
+```json
+{
+  "ok": true,
+  "data": {
+    "balance": 10000.00,
+    "equity": 10000.00,
+    "margin": 0.00,
+    "freeMargin": 10000.00,
+    "profit": 0.00,
+    "leverage": 100,
+    "currency": "USD"
+  }
+}
+```
+
+## Step 4: Place a Trade
+
+```bash
+curl -X POST https://api.easierprop.com/api/accounts/70f60784-.../orders \
+  -H "X-API-Key: sk_your_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "symbol": "EURUSD",
+    "side": "buy",
+    "type": "market",
+    "volume": 0.01
+  }'
+```
+
+**Response:**
+
+```json
+{
+  "ok": true,
+  "data": {
+    "ticket": 12345678,
+    "symbol": "EURUSD",
+    "operation": "Buy",
+    "volume": 0.01,
+    "openPrice": 1.08542
+  }
+}
+```
+
+## Step 5: Stream Live Quotes
+
+```javascript
+const ws = new WebSocket("wss://api.easierprop.com/ws?apiKey=sk_your_key");
+
+ws.onopen = () => {
+  ws.send(JSON.stringify({
+    type: "subscribe",
+    channel: "quotes",
+    account_id: "70f60784-20f1-45ba-9a04-8e01c0b810c3",
+    symbols: ["EURUSD", "GBPUSD"],
+    interval_ms: 500
+  }));
+};
+
+ws.onmessage = (e) => {
+  const msg = JSON.parse(e.data);
+  if (msg.type === "quote") {
+    console.log(`${msg.symbol}: ${msg.bid} / ${msg.ask}`);
+  }
+};
+```
+
+## Response Envelope
+
+Every response uses this format:
+
+```json
+{
+  "ok": true,
+  "data": { ... }
+}
+```
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "CONNECTION_FAILED",
+    "message": "Could not connect to broker"
+  }
+}
+```
+
+## Error Codes
+
+| Code | HTTP | Description |
+|------|------|-------------|
+| `UNAUTHORIZED` | 401 | Missing or invalid API key |
+| `FORBIDDEN` | 403 | Account belongs to another key |
+| `ACCOUNT_NOT_FOUND` | 404 | Account ID does not exist |
+| `SESSION_LOST` | 503 | Broker session dropped |
+| `CONNECTION_FAILED` | 502 | Could not reach MT5 broker |
+| `ORDER_FAILED` | 422 | Broker rejected the trade |
+| `INVALID_REQUEST` | 400 | Bad request body or params |
+| `ACCOUNT_LIMIT_REACHED` | 409 | Max accounts for this key |
+| `UPSTREAM_ERROR` | 502 | Broker service error |
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="REST API Reference" icon="bolt" href="/api-reference/accounts/list-accounts">
+    Browse all endpoints with interactive playground
+  </Card>
+  <Card title="WebSocket Guide" icon="plug" href="/get-started/websocket">
+    Set up real-time quote and order streaming
+  </Card>
+</CardGroup>

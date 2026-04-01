@@ -1,0 +1,1037 @@
+openapi: 3.0.3
+info:
+  title: Easier Prop REST API
+  version: 1.0.0
+  description: |
+    MT5 Trading API. Manage multiple broker accounts, execute trades, and query market data.
+
+    All endpoints require authentication via `X-API-Key` header or `Authorization: Bearer` header.
+
+servers:
+  - url: https://api.easierprop.com
+    description: Production
+
+security:
+  - ApiKeyHeader: []
+  - BearerAuth: []
+
+components:
+  securitySchemes:
+    ApiKeyHeader:
+      type: apiKey
+      in: header
+      name: X-API-Key
+    BearerAuth:
+      type: http
+      scheme: bearer
+
+  schemas:
+    Account:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "70f60784-20f1-45ba-9a04-8e01c0b810c3"
+        label:
+          type: string
+          example: "ICMarkets Demo"
+        broker_host:
+          type: string
+          example: "mt5-demo.icmarkets.com"
+        broker_port:
+          type: integer
+          example: 443
+        mt5_login:
+          type: integer
+          format: int64
+          example: 51234567
+        is_enabled:
+          type: boolean
+          example: true
+        auto_connect:
+          type: boolean
+          example: false
+        session_status:
+          type: string
+          enum: [connected, disconnected]
+          example: "disconnected"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    AccountSummary:
+      type: object
+      properties:
+        balance:
+          type: number
+          example: 10000.00
+        equity:
+          type: number
+          example: 10142.50
+        margin:
+          type: number
+          example: 500.00
+        freeMargin:
+          type: number
+          example: 9642.50
+        marginLevel:
+          type: number
+          example: 2028.50
+        profit:
+          type: number
+          example: 142.50
+        leverage:
+          type: integer
+          example: 100
+        currency:
+          type: string
+          example: "USD"
+
+    Order:
+      type: object
+      properties:
+        ticket:
+          type: integer
+          format: int64
+          example: 12345678
+        symbol:
+          type: string
+          example: "EURUSD"
+        type:
+          type: string
+          example: "Buy"
+        volume:
+          type: number
+          example: 0.01
+        openPrice:
+          type: number
+          example: 1.08542
+        stopLoss:
+          type: number
+          example: 0.0
+        takeProfit:
+          type: number
+          example: 0.0
+        profit:
+          type: number
+          example: 3.20
+        swap:
+          type: number
+          example: 0.0
+        commission:
+          type: number
+          example: -0.07
+        comment:
+          type: string
+          example: ""
+        openTime:
+          type: string
+          example: "2026-04-01T12:00:00"
+
+    Quote:
+      type: object
+      properties:
+        symbol:
+          type: string
+          example: "EURUSD"
+        bid:
+          type: number
+          example: 1.08542
+        ask:
+          type: number
+          example: 1.08544
+        time:
+          type: string
+          example: "2026-04-01T12:30:00"
+
+    Error:
+      type: object
+      properties:
+        ok:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "ACCOUNT_NOT_FOUND"
+            message:
+              type: string
+              example: "Account not found"
+
+  responses:
+    Unauthorized:
+      description: Invalid or missing API key
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Account not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+tags:
+  - name: Accounts
+    description: Register and manage MT5 broker accounts
+  - name: Sessions
+    description: Control broker connections
+  - name: Trading
+    description: Place, modify, and close orders
+  - name: Account Info
+    description: Balance, equity, and statistics
+  - name: Market Data
+    description: Symbols, quotes, and OHLC history
+
+paths:
+  /api/accounts:
+    get:
+      operationId: listAccounts
+      tags: [Accounts]
+      summary: List accounts
+      description: Returns all MT5 accounts for the authenticated API key with live session status.
+      responses:
+        "200":
+          description: Account list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Account"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      operationId: createAccount
+      tags: [Accounts]
+      summary: Create account
+      description: Register a new MT5 broker account. Credentials are encrypted at rest with AES-256-GCM. Max 4 accounts per API key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [label, broker_host, mt5_login, password]
+              properties:
+                label:
+                  type: string
+                  description: Friendly name
+                  example: "ICMarkets Demo"
+                broker_host:
+                  type: string
+                  description: MT5 broker server hostname or IP
+                  example: "mt5-demo.icmarkets.com"
+                broker_port:
+                  type: integer
+                  description: Broker port
+                  default: 443
+                  example: 443
+                mt5_login:
+                  type: integer
+                  format: int64
+                  description: MT5 account number
+                  example: 51234567
+                password:
+                  type: string
+                  description: MT5 account password (stored encrypted)
+                  example: "MyP@ssw0rd"
+                auto_connect:
+                  type: boolean
+                  description: Auto-connect on gateway start
+                  default: false
+      responses:
+        "200":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/Account"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Account limit reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/accounts/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Account ID
+
+    get:
+      operationId: getAccount
+      tags: [Accounts]
+      summary: Get account
+      description: Returns a single account by ID.
+      responses:
+        "200":
+          description: Account details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/Account"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      operationId: updateAccount
+      tags: [Accounts]
+      summary: Update account
+      description: Update account fields. Only include fields you want to change. Updating credentials disconnects the active session.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                label:
+                  type: string
+                broker_host:
+                  type: string
+                broker_port:
+                  type: integer
+                mt5_login:
+                  type: integer
+                  format: int64
+                password:
+                  type: string
+                is_enabled:
+                  type: boolean
+                auto_connect:
+                  type: boolean
+      responses:
+        "200":
+          description: Updated account
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/Account"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      operationId: deleteAccount
+      tags: [Accounts]
+      summary: Delete account
+      description: Permanently delete an account. Disconnects any active session.
+      responses:
+        "200":
+          description: Deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/accounts/{id}/connect:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: connectAccount
+      tags: [Sessions]
+      summary: Connect
+      description: Explicitly connect to the MT5 broker. Not required — all endpoints auto-connect.
+      responses:
+        "200":
+          description: Connected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      connected:
+                        type: boolean
+                        example: true
+                      account_id:
+                        type: string
+                        format: uuid
+        "502":
+          description: Connection failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/accounts/{id}/disconnect:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: disconnectAccount
+      tags: [Sessions]
+      summary: Disconnect
+      description: Explicitly disconnect from the broker.
+      responses:
+        "200":
+          description: Disconnected
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      disconnected:
+                        type: boolean
+                        example: true
+
+  /api/accounts/{id}/status:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: connectionStatus
+      tags: [Sessions]
+      summary: Connection status
+      description: Check session state without triggering a connect.
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      connected:
+                        type: boolean
+                        example: true
+                      connected_since_secs:
+                        type: integer
+                        nullable: true
+                        example: 3421
+                      reconnect_count:
+                        type: integer
+                        example: 0
+
+  /api/accounts/{id}/orders:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+
+    post:
+      operationId: createOrder
+      tags: [Trading]
+      summary: Place order
+      description: |
+        Send a new order to the broker. Supports market, limit, stop, and stop-limit orders.
+
+        **Side + Type mapping:**
+        - `buy` + `market` = Buy
+        - `sell` + `market` = Sell
+        - `buy` + `limit` = BuyLimit
+        - `sell` + `limit` = SellLimit
+        - `buy` + `stop` = BuyStop
+        - `sell` + `stop` = SellStop
+        - `buy` + `stop_limit` = BuyStopLimit
+        - `sell` + `stop_limit` = SellStopLimit
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [symbol, side, type, volume]
+              properties:
+                symbol:
+                  type: string
+                  description: Trading instrument
+                  example: "EURUSD"
+                side:
+                  type: string
+                  enum: [buy, sell]
+                  example: "buy"
+                type:
+                  type: string
+                  enum: [market, limit, stop, stop_limit]
+                  example: "market"
+                volume:
+                  type: number
+                  description: Lot size
+                  example: 0.01
+                price:
+                  type: number
+                  description: Required for limit/stop orders
+                sl:
+                  type: number
+                  description: Stop loss price
+                tp:
+                  type: number
+                  description: Take profit price
+                deviation:
+                  type: integer
+                  description: Max slippage in points
+                comment:
+                  type: string
+                  description: Order comment visible in MT5
+      responses:
+        "200":
+          description: Order result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    description: Broker order result (fields vary by broker)
+        "422":
+          description: Order rejected by broker
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    get:
+      operationId: listOpenOrders
+      tags: [Trading]
+      summary: List open orders
+      description: Returns all open positions and pending orders.
+      responses:
+        "200":
+          description: Open orders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Order"
+
+  /api/accounts/{id}/orders/history:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+        description: "Start datetime (YYYY-MM-DDTHH:mm:ss)"
+        example: "2026-01-01T00:00:00"
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+        description: "End datetime (YYYY-MM-DDTHH:mm:ss)"
+        example: "2026-04-01T23:59:59"
+    get:
+      operationId: orderHistory
+      tags: [Trading]
+      summary: Order history
+      description: Returns closed orders within a date range.
+      responses:
+        "200":
+          description: Closed orders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Order"
+
+  /api/accounts/{id}/orders/{ticket}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: ticket
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+        description: Order ticket number
+
+    put:
+      operationId: modifyOrder
+      tags: [Trading]
+      summary: Modify order
+      description: Modify an existing open or pending order.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                price:
+                  type: number
+                  description: New price (pending orders)
+                sl:
+                  type: number
+                  description: New stop loss
+                tp:
+                  type: number
+                  description: New take profit
+      responses:
+        "200":
+          description: Modification result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+
+    delete:
+      operationId: closeOrder
+      tags: [Trading]
+      summary: Close order
+      description: Close a position or cancel a pending order. Optionally close partial volume.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                volume:
+                  type: number
+                  description: Partial close volume. Omit to close entirely.
+      responses:
+        "200":
+          description: Close result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+
+  /api/accounts/{id}/summary:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: accountSummary
+      tags: [Account Info]
+      summary: Account summary
+      description: Returns balance, equity, margin, profit, leverage, and currency.
+      responses:
+        "200":
+          description: Account summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/AccountSummary"
+
+  /api/accounts/{id}/details:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: accountDetails
+      tags: [Account Info]
+      summary: Account details
+      description: Returns full account information including name, company, server, and group.
+      responses:
+        "200":
+          description: Account details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+
+  /api/accounts/{id}/equity-history:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+        description: "Start datetime (YYYY-MM-DDTHH:mm:ss)"
+      - name: timeframe
+        in: query
+        schema:
+          type: string
+          enum: [H1, H4, D1]
+          default: H1
+        description: Timeframe
+    get:
+      operationId: equityHistory
+      tags: [Account Info]
+      summary: Equity history
+      description: Returns balance and equity over time.
+      responses:
+        "200":
+          description: Equity data points
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+  /api/accounts/{id}/trade-stats:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+        description: "Start datetime (YYYY-MM-DDTHH:mm:ss)"
+    get:
+      operationId: tradeStats
+      tags: [Account Info]
+      summary: Trade statistics
+      description: Returns trading performance metrics including profit factor, win rate, and drawdown.
+      responses:
+        "200":
+          description: Trade stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+
+  /api/accounts/{id}/symbols:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      operationId: listSymbols
+      tags: [Market Data]
+      summary: List symbols
+      description: Returns all trading instruments available on the broker.
+      responses:
+        "200":
+          description: Symbol list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+  /api/accounts/{id}/symbols/{symbol}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: symbol
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Instrument name (e.g. EURUSD)
+    get:
+      operationId: symbolParams
+      tags: [Market Data]
+      summary: Symbol details
+      description: Returns full symbol specification including spread, swap rates, margin, and sessions.
+      responses:
+        "200":
+          description: Symbol details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+
+  /api/accounts/{id}/quote/{symbol}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: symbol
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      operationId: getQuote
+      tags: [Market Data]
+      summary: Get quote
+      description: Returns current bid/ask for a symbol.
+      responses:
+        "200":
+          description: Quote
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/Quote"
+
+  /api/accounts/{id}/quotes:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    post:
+      operationId: batchQuotes
+      tags: [Market Data]
+      summary: Batch quotes
+      description: Fetch quotes for multiple symbols in one request.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [symbols]
+              properties:
+                symbols:
+                  type: array
+                  items:
+                    type: string
+                  example: ["EURUSD", "GBPUSD", "USDJPY"]
+      responses:
+        "200":
+          description: Quotes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Quote"
+
+  /api/accounts/{id}/ohlc/{symbol}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: symbol
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+        description: "Start datetime (YYYY-MM-DDTHH:mm:ss)"
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+        description: "End datetime (YYYY-MM-DDTHH:mm:ss)"
+      - name: timeframe
+        in: query
+        schema:
+          type: integer
+          default: 60
+        description: "Timeframe in minutes (1=M1, 5=M5, 15=M15, 60=H1, 240=H4, 1440=D1)"
+    get:
+      operationId: getOhlc
+      tags: [Market Data]
+      summary: OHLC price history
+      description: Returns candlestick data for a symbol.
+      responses:
+        "200":
+          description: OHLC bars
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        time:
+                          type: string
+                        open:
+                          type: number
+                        high:
+                          type: number
+                        low:
+                          type: number
+                        close:
+                          type: number
+                        tickVolume:
+                          type: integer

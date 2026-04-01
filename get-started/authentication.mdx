@@ -1,0 +1,137 @@
+---
+title: "Authentication"
+description: "How to authenticate with the Easier Prop API"
+---
+
+## API Key
+
+All Easier Prop API requests require an API key. Keys are issued by your administrator and start with `sk_`.
+
+### X-API-Key Header (Recommended)
+
+```bash
+curl -H "X-API-Key: sk_your_key" "https://api.easierprop.com/api/accounts"
+```
+
+Best for production applications. Keeps credentials out of URLs and logs.
+
+### Bearer Token
+
+```bash
+curl -H "Authorization: Bearer sk_your_key" "https://api.easierprop.com/api/accounts"
+```
+
+Standard OAuth-style bearer authentication.
+
+### Query Parameter (WebSocket only)
+
+```
+wss://api.easierprop.com/ws?apiKey=sk_your_key
+```
+
+Used exclusively for WebSocket connections where headers cannot be set during the upgrade handshake.
+
+## Unauthenticated Request
+
+```bash
+curl "https://api.easierprop.com/api/accounts"
+```
+
+**Response (401):**
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "API key required. Pass X-API-Key header or ?apiKey= query param"
+  }
+}
+```
+
+## Invalid Key
+
+```bash
+curl -H "X-API-Key: sk_invalid_key" "https://api.easierprop.com/api/accounts"
+```
+
+**Response (401):**
+
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "UNAUTHORIZED",
+    "message": "Invalid API key"
+  }
+}
+```
+
+## Code Examples
+
+<CodeGroup>
+```javascript JavaScript (fetch)
+const API_KEY = "sk_your_key";
+
+const res = await fetch("https://api.easierprop.com/api/accounts", {
+  headers: { "X-API-Key": API_KEY }
+});
+const { data: accounts } = await res.json();
+console.log(accounts);
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    "https://api.easierprop.com/api/accounts",
+    headers={"X-API-Key": "sk_your_key"}
+)
+accounts = response.json()["data"]
+print(accounts)
+```
+
+```python Python (place a trade)
+import requests
+
+response = requests.post(
+    "https://api.easierprop.com/api/accounts/{account_id}/orders",
+    headers={
+        "X-API-Key": "sk_your_key",
+        "Content-Type": "application/json"
+    },
+    json={
+        "symbol": "EURUSD",
+        "side": "buy",
+        "type": "market",
+        "volume": 0.01
+    }
+)
+order = response.json()["data"]
+print(f"Ticket: {order['ticket']}")
+```
+</CodeGroup>
+
+## WebSocket Authentication
+
+```javascript
+const ws = new WebSocket("wss://api.easierprop.com/ws?apiKey=sk_your_key");
+
+ws.onopen = () => {
+  console.log("Connected and authenticated");
+};
+
+ws.onclose = (event) => {
+  if (event.code === 1008) {
+    console.error("Authentication failed - check your API key");
+  }
+};
+```
+
+## Account Ownership
+
+Each API key can manage up to 4 MT5 accounts. Accounts are scoped to the key that created them. Attempting to access another key's account returns `ACCOUNT_NOT_FOUND`.
+
+## Admin Keys
+
+A separate `X-Admin-Key` header is used for key management endpoints (`/admin/keys`). This is your server's admin secret, not a client API key.

@@ -1,0 +1,107 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "almond",
+  "name": "Easier Prop",
+  "colors": {
+    "primary": "#0a84ff",
+    "light": "#ffffff",
+    "dark": "#e5e7eb"
+  },
+  "favicon": "/favicon.svg",
+  "contextual": {
+    "options": ["copy", "view", "claude", "cursor", "vscode"]
+  },
+  "appearance": {
+    "default": "dark",
+    "strict": true
+  },
+  "background": {
+    "decoration": "gradient"
+  },
+  "api": {
+    "playground": {
+      "display": "interactive",
+      "prefill": true
+    },
+    "baseUrl": "https://api.easierprop.com",
+    "auth": {
+      "method": "key",
+      "name": "X-API-Key"
+    }
+  },
+  "openapi": [
+    "openapi-spec/easierprop.yaml"
+  ],
+  "asyncapi": [
+    "asyncapi-spec/websockets.yaml"
+  ],
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Home",
+        "groups": [
+          {
+            "group": " ",
+            "pages": ["index"]
+          }
+        ]
+      },
+      {
+        "tab": "Get Started",
+        "groups": [
+          {
+            "group": " ",
+            "pages": [
+              "get-started/index",
+              "get-started/authentication",
+              "get-started/websocket"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "REST API",
+        "openapi": {
+          "source": "openapi-spec/easierprop.yaml",
+          "directory": "api-reference"
+        }
+      },
+      {
+        "tab": "WebSocket API",
+        "groups": [
+          {
+            "group": "WebSocket API",
+            "asyncapi": {
+              "source": "asyncapi-spec/websockets.yaml",
+              "directory": "api-reference/streaming"
+            }
+          },
+          {
+            "group": "Guide",
+            "pages": [
+              "get-started/websocket"
+            ]
+          }
+        ]
+      }
+    ],
+    "global": {
+      "anchors": []
+    }
+  },
+  "logo": {
+    "light": "/logo/logo.svg",
+    "dark": "/logo/logo.svg"
+  },
+  "footer": {},
+  "seo": {
+    "metatags": {
+      "og:title": "Easier Prop API",
+      "og:description": "MT5 Trading API — Multi-account management, real-time WebSocket streaming, and order execution",
+      "og:type": "website",
+      "description": "Easier Prop API. Manage multiple MT5 broker accounts, execute trades, stream live quotes, and monitor positions through one unified REST and WebSocket API.",
+      "keywords": "Easier Prop, MT5 API, MetaTrader 5, trading API, WebSocket, prop trading, forex API, order execution"
+    }
+  },
+  "redirects": []
+}
