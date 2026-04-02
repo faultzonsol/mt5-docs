@@ -1044,6 +1044,8 @@ components:
       description: Instrument name (e.g. EURUSD)
 
 tags:
+  - name: Admin
+    description: Authentication, API key management, and admin user CRUD
   - name: Accounts
     description: Register and manage MT5 broker accounts
   - name: Sessions
@@ -1056,8 +1058,6 @@ tags:
     description: Symbols, quotes, OHLC history, and trade sessions
   - name: Enhanced
     description: Portfolio, risk, performance, copy-trade, hedge, breakeven, close-all, lot calculator, and position details
-  - name: Admin
-    description: Authentication, API key management, and admin user CRUD
 
 paths:
   # ════════════════════════════════════════════════════════════════════
