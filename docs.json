@@ -38,15 +38,6 @@
   "navigation": {
     "tabs": [
       {
-        "tab": "Home",
-        "groups": [
-          {
-            "group": " ",
-            "pages": ["index"]
-          }
-        ]
-      },
-      {
         "tab": "Get Started",
         "groups": [
           {

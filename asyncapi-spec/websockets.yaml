@@ -4,7 +4,8 @@ info:
   version: 1.0.0
   description: |
     Real-time WebSocket API for MT5 trading data.
-    Subscribe to channels to receive live quotes, order updates, and profit/equity changes.
+    Subscribe to channels to receive live quotes, order updates, profit/equity changes,
+    heartbeats, new position events, price/spread/P&L alerts, and aggregate feeds.
     Supports multi-account streaming on a single connection.
 
 servers:
@@ -22,6 +23,7 @@ channels:
     title: "Live Quotes"
     description: |
       Real-time bid/ask ticks for subscribed symbols. Updates at the configured interval.
+      Quote data is wrapped in a `data` field containing the upstream quote object.
 
       **Channel name:** `quotes`
       **Required:** `symbols` array, `account_id`
@@ -37,6 +39,7 @@ channels:
     title: "Order Updates"
     description: |
       Real-time order events — new fills, modifications, and closures.
+      Order data is wrapped in a `data` field containing the full order object.
 
       **Channel name:** `orders`
       **Required:** `account_id`
@@ -51,6 +54,7 @@ channels:
     title: "Profit & Equity"
     description: |
       Live equity, profit, margin, and balance updates.
+      Profit data is wrapped in a `data` field.
 
       **Channel name:** `profit`
       **Required:** `account_id`
@@ -61,9 +65,53 @@ channels:
       event:
         $ref: "#/components/messages/ProfitEvent"
 
+  heartbeat:
+    address: /ws
+    title: "Heartbeat"
+    description: |
+      Periodic account health snapshot with balance, equity, margin, and position count.
+
+      **Channel name:** `heartbeat`
+      **Required:** `account_id`
+      **Default interval:** 5000ms
+    messages:
+      subscribe:
+        $ref: "#/components/messages/SubscribeMessage"
+      event:
+        $ref: "#/components/messages/HeartbeatEvent"
+
+  new_position:
+    address: /ws
+    title: "New Position"
+    description: |
+      Fires when a new position is opened on the account. Delivers the full order object in a `data` wrapper.
+
+      **Channel name:** `new_position`
+      **Required:** `account_id`
+    messages:
+      subscribe:
+        $ref: "#/components/messages/SubscribeMessage"
+      event:
+        $ref: "#/components/messages/NewPositionEvent"
+
+  aggregate:
+    address: /ws
+    title: "Aggregate Feed"
+    description: |
+      Combined feed that delivers quotes, orders, and profit updates in a single subscription.
+      Useful when you want all event types without multiple subscribe calls.
+
+      **Channel name:** `aggregate`
+      **Required:** `account_id`, `symbols` (for quote data)
+    messages:
+      subscribe:
+        $ref: "#/components/messages/SubscribeMessage"
+      event:
+        $ref: "#/components/messages/QuoteEvent"
+
 operations:
   subscribeQuotes:
-    action: send
+    action: receive
     channel:
       $ref: "#/channels/quotes"
     summary: Subscribe to live quotes
@@ -71,7 +119,7 @@ operations:
       - $ref: "#/channels/quotes/messages/subscribe"
 
   receiveQuotes:
-    action: receive
+    action: send
     channel:
       $ref: "#/channels/quotes"
     summary: Receive quote ticks
@@ -79,7 +127,7 @@ operations:
       - $ref: "#/channels/quotes/messages/event"
 
   subscribeOrders:
-    action: send
+    action: receive
     channel:
       $ref: "#/channels/orders"
     summary: Subscribe to order updates
@@ -87,7 +135,7 @@ operations:
       - $ref: "#/channels/orders/messages/subscribe"
 
   receiveOrders:
-    action: receive
+    action: send
     channel:
       $ref: "#/channels/orders"
     summary: Receive order events
@@ -95,7 +143,7 @@ operations:
       - $ref: "#/channels/orders/messages/event"
 
   subscribeProfit:
-    action: send
+    action: receive
     channel:
       $ref: "#/channels/profit"
     summary: Subscribe to profit updates
@@ -103,12 +151,60 @@ operations:
       - $ref: "#/channels/profit/messages/subscribe"
 
   receiveProfit:
-    action: receive
+    action: send
     channel:
       $ref: "#/channels/profit"
     summary: Receive profit events
     messages:
       - $ref: "#/channels/profit/messages/event"
+
+  subscribeHeartbeat:
+    action: receive
+    channel:
+      $ref: "#/channels/heartbeat"
+    summary: Subscribe to heartbeat
+    messages:
+      - $ref: "#/channels/heartbeat/messages/subscribe"
+
+  receiveHeartbeat:
+    action: send
+    channel:
+      $ref: "#/channels/heartbeat"
+    summary: Receive heartbeat events
+    messages:
+      - $ref: "#/channels/heartbeat/messages/event"
+
+  subscribeNewPosition:
+    action: receive
+    channel:
+      $ref: "#/channels/new_position"
+    summary: Subscribe to new position events
+    messages:
+      - $ref: "#/channels/new_position/messages/subscribe"
+
+  receiveNewPosition:
+    action: send
+    channel:
+      $ref: "#/channels/new_position"
+    summary: Receive new position events
+    messages:
+      - $ref: "#/channels/new_position/messages/event"
+
+  subscribeAggregate:
+    action: receive
+    channel:
+      $ref: "#/channels/aggregate"
+    summary: Subscribe to aggregate feed
+    messages:
+      - $ref: "#/channels/aggregate/messages/subscribe"
+
+  receiveAggregate:
+    action: send
+    channel:
+      $ref: "#/channels/aggregate"
+    summary: Receive aggregate events
+    messages:
+      - $ref: "#/channels/aggregate/messages/event"
 
 components:
   securitySchemes:
@@ -133,7 +229,7 @@ components:
             const: subscribe
           channel:
             type: string
-            enum: [quotes, orders, profit]
+            enum: [quotes, orders, profit, heartbeat, new_position, aggregate]
             description: Channel to subscribe to
           account_id:
             type: string
@@ -143,7 +239,7 @@ components:
             type: array
             items:
               type: string
-            description: Required for quotes channel
+            description: Required for quotes and aggregate channels
             examples:
               - ["EURUSD", "GBPUSD"]
           interval_ms:
@@ -160,7 +256,7 @@ components:
     QuoteEvent:
       name: quote
       title: Quote Tick
-      summary: Real-time bid/ask update
+      summary: Real-time bid/ask update (data wrapper contains the upstream quote object)
       contentType: application/json
       payload:
         type: object
@@ -171,23 +267,33 @@ components:
           account_id:
             type: string
             format: uuid
-          symbol:
-            type: string
-            example: "EURUSD"
-          bid:
-            type: number
-            example: 1.08542
-          ask:
-            type: number
-            example: 1.08544
-          time:
-            type: string
-            example: "2026-04-01T12:30:00Z"
+          data:
+            type: object
+            description: Upstream quote object
+            properties:
+              ask:
+                type: number
+                example: 1.08544
+              bid:
+                type: number
+                example: 1.08542
+              last:
+                type: number
+                example: 0.0
+              symbol:
+                type: string
+                example: "EURUSD"
+              time:
+                type: string
+                example: "2026-04-01T12:30:00"
+              volume:
+                type: number
+                example: 0.0
 
     OrderUpdateEvent:
       name: order_update
       title: Order Update
-      summary: Order opened, modified, or closed
+      summary: Order opened, modified, or closed (data wrapper contains the full order object)
       contentType: application/json
       payload:
         type: object
@@ -198,8 +304,9 @@ components:
           account_id:
             type: string
             format: uuid
-          order:
+          data:
             type: object
+            description: Full order object
             properties:
               ticket:
                 type: integer
@@ -207,10 +314,10 @@ components:
               symbol:
                 type: string
                 example: "EURUSD"
-              type:
+              orderType:
                 type: string
                 example: "Buy"
-              volume:
+              lots:
                 type: number
                 example: 0.01
               openPrice:
@@ -219,11 +326,17 @@ components:
               profit:
                 type: number
                 example: 3.20
+              swap:
+                type: number
+                example: 0.0
+              commission:
+                type: number
+                example: -0.07
 
     ProfitEvent:
       name: profit
       title: Profit Update
-      summary: Live equity and P&L
+      summary: Live equity and P&L (data wrapper)
       contentType: application/json
       payload:
         type: object
@@ -234,18 +347,271 @@ components:
           account_id:
             type: string
             format: uuid
+          data:
+            type: object
+            description: Profit and equity data
+            properties:
+              balance:
+                type: number
+                example: 10000.00
+              equity:
+                type: number
+                example: 10142.50
+              profit:
+                type: number
+                example: 142.50
+              margin:
+                type: number
+                example: 500.00
+              freeMargin:
+                type: number
+                example: 9642.50
+
+    HeartbeatEvent:
+      name: heartbeat
+      title: Heartbeat
+      summary: Periodic account health snapshot
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            const: heartbeat
+          account_id:
+            type: string
+            format: uuid
           balance:
             type: number
             example: 10000.00
           equity:
             type: number
             example: 10142.50
-          profit:
+          free_margin:
             type: number
-            example: 142.50
+            example: 9642.50
           margin:
             type: number
             example: 500.00
-          freeMargin:
+          position_count:
+            type: integer
+            example: 3
+          profit:
             type: number
-            example: 9642.50
+            example: 142.50
+
+    NewPositionEvent:
+      name: new_position
+      title: New Position
+      summary: Fired when a new position is opened
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            const: new_position
+          account_id:
+            type: string
+            format: uuid
+          data:
+            type: object
+            description: Full order object for the new position
+
+    PriceAlertMessage:
+      name: price_alert
+      title: Register Price Alert
+      summary: Register a price alert for a symbol
+      contentType: application/json
+      payload:
+        type: object
+        required: [type, account_id, symbol, direction, target_price]
+        properties:
+          type:
+            type: string
+            const: price_alert
+          account_id:
+            type: string
+            format: uuid
+          symbol:
+            type: string
+            example: "EURUSD"
+          direction:
+            type: string
+            enum: [above, below]
+            example: "above"
+          target_price:
+            type: number
+            example: 1.09000
+
+    SpreadAlertMessage:
+      name: spread_alert
+      title: Register Spread Alert
+      summary: Register a spread alert for a symbol
+      contentType: application/json
+      payload:
+        type: object
+        required: [type, account_id, symbol, max_pips]
+        properties:
+          type:
+            type: string
+            const: spread_alert
+          account_id:
+            type: string
+            format: uuid
+          symbol:
+            type: string
+            example: "EURUSD"
+          max_pips:
+            type: number
+            example: 2.0
+
+    PlAlertMessage:
+      name: pl_alert
+      title: Register P&L Alert
+      summary: Register a profit/loss threshold alert
+      contentType: application/json
+      payload:
+        type: object
+        required: [type, account_id, condition, threshold]
+        properties:
+          type:
+            type: string
+            const: pl_alert
+          account_id:
+            type: string
+            format: uuid
+          condition:
+            type: string
+            enum: [above, below]
+            example: "below"
+          threshold:
+            type: number
+            example: -500.00
+
+    CancelAlertMessage:
+      name: cancel_alert
+      title: Cancel Alert
+      summary: Cancel a previously registered alert
+      contentType: application/json
+      payload:
+        type: object
+        required: [type, alert_id]
+        properties:
+          type:
+            type: string
+            const: cancel_alert
+          alert_id:
+            type: string
+            format: uuid
+
+    AlertRegisteredEvent:
+      name: alert_registered
+      title: Alert Registered
+      summary: Confirmation that an alert was registered
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            const: alert_registered
+          alert_id:
+            type: string
+            format: uuid
+          alert_type:
+            type: string
+            enum: [price_alert, spread_alert, pl_alert]
+
+    PriceAlertTriggeredEvent:
+      name: price_alert_triggered
+      title: Price Alert Triggered
+      summary: Fired when a price alert condition is met
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            const: price_alert_triggered
+          account_id:
+            type: string
+            format: uuid
+          alert_id:
+            type: string
+            format: uuid
+          current_ask:
+            type: number
+            example: 1.09010
+          current_bid:
+            type: number
+            example: 1.09008
+          direction:
+            type: string
+            example: "above"
+          symbol:
+            type: string
+            example: "EURUSD"
+          target_price:
+            type: number
+            example: 1.09000
+
+    SpreadAlertTriggeredEvent:
+      name: spread_alert_triggered
+      title: Spread Alert Triggered
+      summary: Fired when spread exceeds the configured threshold
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            const: spread_alert_triggered
+          account_id:
+            type: string
+            format: uuid
+          alert_id:
+            type: string
+            format: uuid
+          ask:
+            type: number
+            example: 1.08560
+          bid:
+            type: number
+            example: 1.08530
+          max_pips:
+            type: number
+            example: 2.0
+          spread_pips:
+            type: number
+            example: 3.0
+          symbol:
+            type: string
+            example: "EURUSD"
+
+    PlAlertTriggeredEvent:
+      name: pl_alert_triggered
+      title: P&L Alert Triggered
+      summary: Fired when account P&L crosses the threshold
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            const: pl_alert_triggered
+          account_id:
+            type: string
+            format: uuid
+          alert_id:
+            type: string
+            format: uuid
+          condition:
+            type: string
+            example: "below"
+          current_value:
+            type: number
+            example: -520.00
+          threshold:
+            type: number
+            example: -500.00

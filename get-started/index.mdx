@@ -1,7 +1,51 @@
 ---
-title: "Quick Start"
-description: "Get up and running with the Easier Prop API in minutes"
+title: "Get Started"
+description: "Get up and running with the Easier Prop MT5 API"
+mode: "custom"
 ---
+
+<div className="relative text-[#e7e9ea]">
+
+  <div className="flex flex-col items-center justify-center pt-8 pb-8 md:pt-16 md:pb-12 relative px-4">
+    <div className="text-center max-w-6xl mx-auto">
+      <div className="text-center text-xs sm:text-base text-[#71767b] font-medium leading-normal tracking-wide uppercase">MT5 Trading Infrastructure</div>
+      <div className="text-center text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-semibold leading-tight sm:leading-[60px] md:leading-[80px] lg:leading-[96px] mt-2">Easier Prop API</div>
+      <div className="text-center text-[#71767b] text-sm sm:text-lg font-normal leading-6 mt-4 max-w-2xl mx-auto">
+        Manage multiple MT5 accounts, execute trades, and stream real-time market data through one unified API.
+      </div>
+    </div>
+  </div>
+
+  <div className="max-w-4xl mx-auto px-4 pb-12">
+    <div className="grid grid-cols-3 gap-2 md:gap-4">
+      <div className="bg-[#16181c] border border-[#2f3336] rounded-lg md:rounded-xl p-3 md:p-5 text-center">
+        <div className="text-xl md:text-2xl font-bold text-white mb-1">29</div>
+        <div className="text-xs md:text-sm font-semibold text-gray-100 mb-1">REST Endpoints</div>
+        <div className="text-xs text-[#71767b] hidden md:block">Accounts, Trading, Market Data</div>
+      </div>
+      <div className="bg-[#16181c] border border-[#2f3336] rounded-lg md:rounded-xl p-3 md:p-5 text-center">
+        <div className="text-xl md:text-2xl font-bold text-white mb-1">5+</div>
+        <div className="text-xs md:text-sm font-semibold text-gray-100 mb-1">WS Channels</div>
+        <div className="text-xs text-[#71767b] hidden md:block">Quotes, Orders, Profit, Heartbeat, Alerts</div>
+      </div>
+      <div className="bg-[#16181c] border border-[#2f3336] rounded-lg md:rounded-xl p-3 md:p-5 text-center">
+        <div className="text-xl md:text-2xl font-bold text-white mb-1">4</div>
+        <div className="text-xs md:text-sm font-semibold text-gray-100 mb-1">MT5 Accounts</div>
+        <div className="text-xs text-[#71767b] hidden md:block">Per API key</div>
+      </div>
+    </div>
+  </div>
+
+  <div className="max-w-6xl mx-auto px-4">
+    <div className="w-full h-px bg-gradient-to-r from-transparent via-[#2f3336] to-transparent"></div>
+  </div>
+
+  <div className="max-w-4xl mx-auto pt-12 md:pt-16 pb-6 px-4">
+    <div className="text-center text-2xl sm:text-3xl md:text-4xl font-bold leading-tight pb-2">Quick Start</div>
+    <div className="text-center text-[#71767b] text-sm sm:text-lg font-normal leading-6 pb-8">From zero to your first trade in 4 steps</div>
+  </div>
+
+</div>
 
 ## Base URL
 
@@ -11,7 +55,7 @@ https://api.easierprop.com
 
 ## Authentication
 
-All requests require an API key. Three methods are supported:
+All requests require an API key prefixed with `sk_`. Pass it via header, bearer token, or query parameter (WebSocket only).
 
 <CodeGroup>
 ```bash X-API-Key Header (recommended)
@@ -26,6 +70,8 @@ curl -H "Authorization: Bearer sk_your_key" "https://api.easierprop.com/api/acco
 wss://api.easierprop.com/ws?apiKey=sk_your_key
 ```
 </CodeGroup>
+
+<Tip>See the full [Authentication guide](/get-started/authentication) for error handling, code examples, and WebSocket auth details.</Tip>
 
 ## Step 1: Register Your MT5 Account
 
@@ -42,9 +88,7 @@ curl -X POST https://api.easierprop.com/api/accounts \
   }'
 ```
 
-**Response:**
-
-```json
+```json Response
 {
   "ok": true,
   "data": {
@@ -62,6 +106,8 @@ curl -X POST https://api.easierprop.com/api/accounts \
 }
 ```
 
+<Note>Credentials are encrypted at rest. The password is never returned in API responses.</Note>
+
 ## Step 2: Connect to the Broker
 
 ```bash
@@ -69,45 +115,19 @@ curl -X POST https://api.easierprop.com/api/accounts/70f60784-.../connect \
   -H "X-API-Key: sk_your_key"
 ```
 
-**Response:**
-
-```json
+```json Response
 {
   "ok": true,
   "data": {
-    "connected": true,
-    "account_id": "70f60784-20f1-45ba-9a04-8e01c0b810c3"
+    "account_id": "70f60784-20f1-45ba-9a04-8e01c0b810c3",
+    "connected": true
   }
 }
 ```
 
-<Note>You can skip this step. All endpoints auto-connect when needed.</Note>
+<Note>You can skip this step. All endpoints auto-connect when needed. Sessions are health-checked every 30s with automatic reconnection.</Note>
 
-## Step 3: Check Your Balance
-
-```bash
-curl https://api.easierprop.com/api/accounts/70f60784-.../summary \
-  -H "X-API-Key: sk_your_key"
-```
-
-**Response:**
-
-```json
-{
-  "ok": true,
-  "data": {
-    "balance": 10000.00,
-    "equity": 10000.00,
-    "margin": 0.00,
-    "freeMargin": 10000.00,
-    "profit": 0.00,
-    "leverage": 100,
-    "currency": "USD"
-  }
-}
-```
-
-## Step 4: Place a Trade
+## Step 3: Place a Trade
 
 ```bash
 curl -X POST https://api.easierprop.com/api/accounts/70f60784-.../orders \
@@ -121,27 +141,38 @@ curl -X POST https://api.easierprop.com/api/accounts/70f60784-.../orders \
   }'
 ```
 
-**Response:**
-
-```json
+```json Response
 {
   "ok": true,
   "data": {
     "ticket": 12345678,
     "symbol": "EURUSD",
-    "operation": "Buy",
-    "volume": 0.01,
-    "openPrice": 1.08542
+    "orderType": "Buy",
+    "lots": 0.01,
+    "openPrice": 1.08542,
+    "stopLoss": 0.0,
+    "takeProfit": 0.0,
+    "profit": 0.0,
+    "swap": 0.0,
+    "commission": -0.07,
+    "comment": "",
+    "openTime": "2026-04-01T12:00:00"
   }
 }
 ```
 
-## Step 5: Stream Live Quotes
+Supported order types: `market`, `limit`, `stop`, `stop_limit`.
 
-```javascript
+## Step 4: Stream Live Data
+
+Connect via WebSocket and subscribe to real-time channels:
+
+<CodeGroup>
+```javascript JavaScript
 const ws = new WebSocket("wss://api.easierprop.com/ws?apiKey=sk_your_key");
 
 ws.onopen = () => {
+  // Stream live quotes
   ws.send(JSON.stringify({
     type: "subscribe",
     channel: "quotes",
@@ -149,28 +180,108 @@ ws.onopen = () => {
     symbols: ["EURUSD", "GBPUSD"],
     interval_ms: 500
   }));
+
+  // Monitor order fills
+  ws.send(JSON.stringify({
+    type: "subscribe",
+    channel: "orders",
+    account_id: "70f60784-20f1-45ba-9a04-8e01c0b810c3"
+  }));
+
+  // Track live P&L
+  ws.send(JSON.stringify({
+    type: "subscribe",
+    channel: "profit",
+    account_id: "70f60784-20f1-45ba-9a04-8e01c0b810c3",
+    interval_ms: 1000
+  }));
+
+  // Heartbeat for account health
+  ws.send(JSON.stringify({
+    type: "subscribe",
+    channel: "heartbeat",
+    account_id: "70f60784-20f1-45ba-9a04-8e01c0b810c3"
+  }));
 };
 
 ws.onmessage = (e) => {
   const msg = JSON.parse(e.data);
-  if (msg.type === "quote") {
-    console.log(`${msg.symbol}: ${msg.bid} / ${msg.ask}`);
+  switch (msg.type) {
+    case "quote":
+      console.log(`${msg.data.symbol}: ${msg.data.bid} / ${msg.data.ask}`);
+      break;
+    case "order_update":
+      console.log(`Order ${msg.data.ticket}: ${msg.data.orderType} ${msg.data.symbol}`);
+      break;
+    case "profit":
+      console.log(`Equity: ${msg.data.equity} | P&L: ${msg.data.profit}`);
+      break;
+    case "heartbeat":
+      console.log(`Heartbeat: balance=${msg.balance} positions=${msg.position_count}`);
+      break;
   }
 };
 ```
 
-## Response Envelope
+```python Python
+import asyncio, json, websockets
 
-Every response uses this format:
+async def main():
+    uri = "wss://api.easierprop.com/ws?apiKey=sk_your_key"
+    async with websockets.connect(uri) as ws:
+        await ws.send(json.dumps({
+            "type": "subscribe",
+            "channel": "quotes",
+            "account_id": "70f60784-20f1-45ba-9a04-8e01c0b810c3",
+            "symbols": ["EURUSD"],
+            "interval_ms": 500
+        }))
 
-```json
+        await ws.send(json.dumps({
+            "type": "subscribe",
+            "channel": "heartbeat",
+            "account_id": "70f60784-20f1-45ba-9a04-8e01c0b810c3"
+        }))
+
+        async for message in ws:
+            msg = json.loads(message)
+            if msg["type"] == "quote":
+                d = msg["data"]
+                print(f"{d['symbol']}: {d['bid']} / {d['ask']}")
+            elif msg["type"] == "profit":
+                d = msg["data"]
+                print(f"Equity: {d['equity']} | P&L: {d['profit']}")
+            elif msg["type"] == "heartbeat":
+                print(f"Heartbeat: balance={msg['balance']} positions={msg['position_count']}")
+
+asyncio.run(main())
+```
+</CodeGroup>
+
+| Channel | Description | `symbols` required | Default interval |
+|---------|-------------|:-:|--------|
+| `quotes` | Real-time bid/ask ticks | Yes | 500ms |
+| `orders` | Order open/modify/close events | No | instant |
+| `profit` | Live equity, margin, and P&L | No | 1000ms |
+| `heartbeat` | Account health snapshot | No | 5000ms |
+| `new_position` | New position opened | No | instant |
+| `aggregate` | Combined quotes + orders + profit | Yes | 500ms |
+
+<Tip>See the full [WebSocket Guide](/get-started/websocket) for alerts, unsubscribing, multi-account streaming, error handling, and keepalive.</Tip>
+
+## Response Format
+
+Every API response follows the same envelope:
+
+<CodeGroup>
+```json Success
 {
   "ok": true,
   "data": { ... }
 }
 ```
 
-```json
+```json Error
 {
   "ok": false,
   "error": {
@@ -179,28 +290,44 @@ Every response uses this format:
   }
 }
 ```
+</CodeGroup>
 
 ## Error Codes
 
 | Code | HTTP | Description |
-|------|------|-------------|
+|------|:----:|-------------|
 | `UNAUTHORIZED` | 401 | Missing or invalid API key |
 | `FORBIDDEN` | 403 | Account belongs to another key |
 | `ACCOUNT_NOT_FOUND` | 404 | Account ID does not exist |
-| `SESSION_LOST` | 503 | Broker session dropped |
-| `CONNECTION_FAILED` | 502 | Could not reach MT5 broker |
-| `ORDER_FAILED` | 422 | Broker rejected the trade |
 | `INVALID_REQUEST` | 400 | Bad request body or params |
-| `ACCOUNT_LIMIT_REACHED` | 409 | Max accounts for this key |
+| `ORDER_FAILED` | 422 | Broker rejected the trade |
+| `ACCOUNT_LIMIT_REACHED` | 409 | Max 4 accounts per key |
+| `CONNECTION_FAILED` | 502 | Could not reach MT5 broker |
+| `SESSION_LOST` | 503 | Broker session dropped |
 | `UPSTREAM_ERROR` | 502 | Broker service error |
 
-## Next Steps
+<div className="relative text-[#e7e9ea]">
+  <div className="max-w-6xl mx-auto px-4 pt-4">
+    <div className="w-full h-px bg-gradient-to-r from-transparent via-[#2f3336] to-transparent"></div>
+  </div>
 
-<CardGroup cols={2}>
-  <Card title="REST API Reference" icon="bolt" href="/api-reference/accounts/list-accounts">
-    Browse all endpoints with interactive playground
-  </Card>
-  <Card title="WebSocket Guide" icon="plug" href="/get-started/websocket">
-    Set up real-time quote and order streaming
-  </Card>
-</CardGroup>
+  <div className="max-w-4xl mx-auto pt-10 pb-8 px-4">
+    <div className="text-center text-2xl sm:text-3xl font-bold leading-tight pb-2">Explore the API</div>
+    <div className="text-center text-[#71767b] text-sm sm:text-lg font-normal leading-6 pb-8">Everything you need to trade on MetaTrader 5</div>
+
+    <CardGroup cols={2}>
+      <Card title="REST API Reference" icon="bolt" href="/api-reference/accounts/list-accounts">
+        Browse all 29 endpoints with the interactive playground.
+      </Card>
+      <Card title="WebSocket Guide" icon="signal-stream" href="/get-started/websocket">
+        Real-time channels: quotes, orders, profit, heartbeat, and alerts.
+      </Card>
+      <Card title="Authentication" icon="key" href="/get-started/authentication">
+        API key methods, code examples, and WebSocket auth.
+      </Card>
+      <Card title="WebSocket API Spec" icon="plug" href="/api-reference/streaming">
+        Full AsyncAPI reference for all WebSocket operations.
+      </Card>
+    </CardGroup>
+  </div>
+</div>

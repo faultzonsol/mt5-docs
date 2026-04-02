@@ -1,6 +1,6 @@
 ---
 title: "WebSocket Guide"
-description: "Real-time quote, order, and profit streaming via WebSocket"
+description: "Real-time quote, order, profit, heartbeat, and alert streaming via WebSocket"
 ---
 
 ## Connection
@@ -38,51 +38,240 @@ Send a JSON message to start streaming:
 
 ### Quote Ticks
 
+Quote data is wrapped in a `data` field containing the upstream quote object:
+
 ```json
 {
   "type": "quote",
   "account_id": "70f60784-...",
-  "symbol": "EURUSD",
-  "bid": 1.08542,
-  "ask": 1.08544,
-  "time": "2026-04-01T12:30:00Z"
+  "data": {
+    "ask": 1.08544,
+    "bid": 1.08542,
+    "last": 0.0,
+    "symbol": "EURUSD",
+    "time": "2026-04-01T12:30:00",
+    "volume": 0.0
+  }
 }
 ```
 
 ### Order Updates
 
-Sent when an order is opened, modified, or closed:
+Sent when an order is opened, modified, or closed. Order data is wrapped in a `data` field:
 
 ```json
 {
   "type": "order_update",
   "account_id": "70f60784-...",
-  "order": {
+  "data": {
     "ticket": 12345678,
     "symbol": "EURUSD",
-    "type": "Buy",
-    "volume": 0.01,
+    "orderType": "Buy",
+    "lots": 0.01,
     "openPrice": 1.08542,
-    "profit": 3.20
+    "profit": 3.20,
+    "swap": 0.0,
+    "commission": -0.07
   }
 }
 ```
 
 ### Profit Updates
 
-Live equity and P&L:
+Live equity and P&L, wrapped in a `data` field:
 
 ```json
 {
   "type": "profit",
   "account_id": "70f60784-...",
-  "balance": 10000.00,
-  "equity": 10142.50,
-  "profit": 142.50,
-  "margin": 500.00,
-  "freeMargin": 9642.50
+  "data": {
+    "balance": 10000.00,
+    "equity": 10142.50,
+    "profit": 142.50,
+    "margin": 500.00,
+    "freeMargin": 9642.50
+  }
 }
 ```
+
+### Heartbeat
+
+Periodic account health snapshot with balance, equity, margin, and position count:
+
+```json
+{
+  "type": "heartbeat",
+  "account_id": "70f60784-...",
+  "balance": 10000.00,
+  "equity": 10142.50,
+  "free_margin": 9642.50,
+  "margin": 500.00,
+  "position_count": 3,
+  "profit": 142.50
+}
+```
+
+Subscribe to heartbeat:
+
+```json
+{
+  "type": "subscribe",
+  "channel": "heartbeat",
+  "account_id": "70f60784-20f1-45ba-9a04-8e01c0b810c3"
+}
+```
+
+### New Position
+
+Fires when a new position is opened on the account. The full order object is delivered in the `data` field:
+
+```json
+{
+  "type": "new_position",
+  "account_id": "70f60784-...",
+  "data": {
+    "ticket": 12345680,
+    "symbol": "GBPUSD",
+    "orderType": "Buy",
+    "lots": 0.02,
+    "openPrice": 1.26110,
+    "profit": 0.0
+  }
+}
+```
+
+Subscribe to new positions:
+
+```json
+{
+  "type": "subscribe",
+  "channel": "new_position",
+  "account_id": "70f60784-20f1-45ba-9a04-8e01c0b810c3"
+}
+```
+
+## Alerts
+
+Register price, spread, or P&L alerts to be notified when conditions are met. Alerts are one-shot: they fire once and are automatically removed.
+
+### Price Alert
+
+Register a price alert to trigger when a symbol's price crosses a threshold:
+
+```json
+{
+  "type": "price_alert",
+  "account_id": "70f60784-...",
+  "symbol": "EURUSD",
+  "direction": "above",
+  "target_price": 1.09000
+}
+```
+
+**Server confirms registration:**
+
+```json
+{
+  "type": "alert_registered",
+  "alert_id": "a1b2c3d4-...",
+  "alert_type": "price_alert"
+}
+```
+
+**When triggered:**
+
+```json
+{
+  "type": "price_alert_triggered",
+  "account_id": "70f60784-...",
+  "alert_id": "a1b2c3d4-...",
+  "current_ask": 1.09010,
+  "current_bid": 1.09008,
+  "direction": "above",
+  "symbol": "EURUSD",
+  "target_price": 1.09000
+}
+```
+
+### Spread Alert
+
+Register a spread alert to trigger when the spread exceeds a threshold in pips:
+
+```json
+{
+  "type": "spread_alert",
+  "account_id": "70f60784-...",
+  "symbol": "EURUSD",
+  "max_pips": 2.0
+}
+```
+
+**When triggered:**
+
+```json
+{
+  "type": "spread_alert_triggered",
+  "account_id": "70f60784-...",
+  "alert_id": "e5f6g7h8-...",
+  "ask": 1.08560,
+  "bid": 1.08530,
+  "max_pips": 2.0,
+  "spread_pips": 3.0,
+  "symbol": "EURUSD"
+}
+```
+
+### P&L Alert
+
+Register a P&L alert to trigger when account profit crosses a threshold:
+
+```json
+{
+  "type": "pl_alert",
+  "account_id": "70f60784-...",
+  "condition": "below",
+  "threshold": -500.00
+}
+```
+
+**When triggered:**
+
+```json
+{
+  "type": "pl_alert_triggered",
+  "account_id": "70f60784-...",
+  "alert_id": "i9j0k1l2-...",
+  "condition": "below",
+  "current_value": -520.00,
+  "threshold": -500.00
+}
+```
+
+### Cancel Alert
+
+Cancel a previously registered alert before it triggers:
+
+```json
+{
+  "type": "cancel_alert",
+  "alert_id": "a1b2c3d4-..."
+}
+```
+
+## Aggregate Feed
+
+The `aggregate` channel combines quotes, orders, and profit updates into a single subscription. Useful when you want all event types without multiple subscribe calls:
+
+```json
+{
+  "type": "subscribe",
+  "channel": "aggregate",
+  "account_id": "70f60784-20f1-45ba-9a04-8e01c0b810c3",
+  "symbols": ["EURUSD", "GBPUSD"]
+}
+```
+
+You will receive `quote`, `order_update`, and `profit` messages on this single subscription, each with the standard `data` wrapper.
 
 ## Unsubscribe
 
@@ -109,8 +298,11 @@ Unsubscribe from everything on an account:
 | Channel | Description | `symbols` required | `interval_ms` default |
 |---------|-------------|-------------------|----------------------|
 | `quotes` | Real-time bid/ask ticks | yes | 500ms |
-| `orders` | Order open/modify/close events | no | — |
+| `orders` | Order open/modify/close events | no | -- |
 | `profit` | Live equity and P&L | no | 1000ms |
+| `heartbeat` | Account health snapshot | no | 5000ms |
+| `new_position` | New position opened | no | -- |
+| `aggregate` | Combined quotes + orders + profit | yes | 500ms |
 
 ## Multi-Account Streaming
 
@@ -202,6 +394,22 @@ ws.onopen = () => {
     account_id: "70f60784-20f1-45ba-9a04-8e01c0b810c3",
     interval_ms: 1000
   }));
+
+  // Heartbeat for account health
+  ws.send(JSON.stringify({
+    type: "subscribe",
+    channel: "heartbeat",
+    account_id: "70f60784-20f1-45ba-9a04-8e01c0b810c3"
+  }));
+
+  // Price alert
+  ws.send(JSON.stringify({
+    type: "price_alert",
+    account_id: "70f60784-20f1-45ba-9a04-8e01c0b810c3",
+    symbol: "EURUSD",
+    direction: "above",
+    target_price: 1.09000
+  }));
 };
 
 ws.onmessage = (event) => {
@@ -213,15 +421,39 @@ ws.onmessage = (event) => {
       break;
 
     case "quote":
-      console.log(`${msg.symbol}: ${msg.bid} / ${msg.ask}`);
+      console.log(`${msg.data.symbol}: ${msg.data.bid} / ${msg.data.ask}`);
       break;
 
     case "order_update":
-      console.log(`Order ${msg.order.ticket}: ${msg.order.type} ${msg.order.symbol} P&L=${msg.order.profit}`);
+      console.log(`Order ${msg.data.ticket}: ${msg.data.orderType} ${msg.data.symbol} P&L=${msg.data.profit}`);
       break;
 
     case "profit":
-      console.log(`Equity: ${msg.equity} | Profit: ${msg.profit}`);
+      console.log(`Equity: ${msg.data.equity} | Profit: ${msg.data.profit}`);
+      break;
+
+    case "heartbeat":
+      console.log(`Heartbeat: balance=${msg.balance} equity=${msg.equity} positions=${msg.position_count}`);
+      break;
+
+    case "new_position":
+      console.log(`New position: ${msg.data.ticket} ${msg.data.orderType} ${msg.data.symbol}`);
+      break;
+
+    case "alert_registered":
+      console.log(`Alert registered: ${msg.alert_id} (${msg.alert_type})`);
+      break;
+
+    case "price_alert_triggered":
+      console.log(`Price alert! ${msg.symbol} crossed ${msg.target_price} (${msg.direction})`);
+      break;
+
+    case "spread_alert_triggered":
+      console.log(`Spread alert! ${msg.symbol} spread=${msg.spread_pips} pips`);
+      break;
+
+    case "pl_alert_triggered":
+      console.log(`P&L alert! ${msg.condition} ${msg.threshold}, current=${msg.current_value}`);
       break;
 
     case "error":
@@ -264,13 +496,35 @@ async def main():
             "interval_ms": 1000
         }))
 
+        # Subscribe to heartbeat
+        await ws.send(json.dumps({
+            "type": "subscribe",
+            "channel": "heartbeat",
+            "account_id": ACCOUNT_ID
+        }))
+
+        # Register a price alert
+        await ws.send(json.dumps({
+            "type": "price_alert",
+            "account_id": ACCOUNT_ID,
+            "symbol": "EURUSD",
+            "direction": "above",
+            "target_price": 1.09000
+        }))
+
         async for message in ws:
             msg = json.loads(message)
 
             if msg["type"] == "quote":
-                print(f"{msg['symbol']}: {msg['bid']} / {msg['ask']}")
+                d = msg["data"]
+                print(f"{d['symbol']}: {d['bid']} / {d['ask']}")
             elif msg["type"] == "profit":
-                print(f"Equity: {msg['equity']} | P&L: {msg['profit']}")
+                d = msg["data"]
+                print(f"Equity: {d['equity']} | P&L: {d['profit']}")
+            elif msg["type"] == "heartbeat":
+                print(f"Heartbeat: balance={msg['balance']} positions={msg['position_count']}")
+            elif msg["type"] == "price_alert_triggered":
+                print(f"Price alert! {msg['symbol']} crossed {msg['target_price']}")
             elif msg["type"] == "error":
                 print(f"Error: {msg['message']}")
 
