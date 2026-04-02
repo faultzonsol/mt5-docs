@@ -551,51 +551,6 @@ components:
           type: integer
           example: 0
 
-    AdminApiKey:
-      type: object
-      properties:
-        created_at:
-          type: string
-          format: date-time
-        id:
-          type: string
-          format: uuid
-        key:
-          type: string
-          description: Full API key (only returned on creation)
-          example: "sk_live_abc123..."
-        label:
-          type: string
-          example: "Production Key"
-        max_accounts:
-          type: integer
-          example: 4
-        prefix:
-          type: string
-          example: "sk_live_abc"
-
-    AdminApiKeyListItem:
-      type: object
-      properties:
-        created_at:
-          type: string
-          format: date-time
-        id:
-          type: string
-          format: uuid
-        is_active:
-          type: boolean
-          example: true
-        label:
-          type: string
-          example: "Production Key"
-        max_accounts:
-          type: integer
-          example: 4
-        prefix:
-          type: string
-          example: "sk_live_abc"
-
     Error:
       type: object
       properties:
@@ -639,8 +594,6 @@ tags:
     description: Balance, equity, and statistics
   - name: Market Data
     description: Symbols, quotes, OHLC history, market status, and margin checks
-  - name: Admin
-    description: API key management
 
 paths:
   /api/accounts:
@@ -1795,58 +1748,3 @@ paths:
                         tickVolume:
                           type: integer
 
-  /api/admin/keys:
-    get:
-      operationId: adminListKeys
-      tags: [Admin]
-      summary: List API keys
-      description: List all API keys (admin only).
-      responses:
-        "200":
-          description: API key list
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                    example: true
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/AdminApiKeyListItem"
-
-    post:
-      operationId: adminCreateKey
-      tags: [Admin]
-      summary: Create API key
-      description: Create a new API key (admin only). The full key is only returned once on creation.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [label]
-              properties:
-                label:
-                  type: string
-                  example: "Production Key"
-                max_accounts:
-                  type: integer
-                  default: 4
-                  example: 4
-      responses:
-        "200":
-          description: API key created
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                    example: true
-                  data:
-                    $ref: "#/components/schemas/AdminApiKey"
