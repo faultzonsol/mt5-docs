@@ -425,7 +425,7 @@ components:
       contentType: application/json
       payload:
         type: object
-        required: [type, account_id, symbol, direction, target_price]
+        required: [type, account_id, symbol, direction, price]
         properties:
           type:
             type: string
@@ -440,8 +440,9 @@ components:
             type: string
             enum: [above, below]
             example: "above"
-          target_price:
+          price:
             type: number
+            description: Target price threshold
             example: 1.09000
 
     SpreadAlertMessage:
@@ -473,7 +474,7 @@ components:
       contentType: application/json
       payload:
         type: object
-        required: [type, account_id, condition, threshold]
+        required: [type, account_id, condition, value]
         properties:
           type:
             type: string
@@ -483,10 +484,11 @@ components:
             format: uuid
           condition:
             type: string
-            enum: [above, below]
-            example: "below"
-          threshold:
+            enum: [equity_above, equity_below, profit_above, profit_below]
+            example: "equity_below"
+          value:
             type: number
+            description: P&L threshold value
             example: -500.00
 
     CancelAlertMessage:

@@ -913,6 +913,9 @@ components:
         max_accounts:
           type: integer
           example: 4
+        is_active:
+          type: boolean
+          example: true
         admin_id:
           type: integer
           example: 1
