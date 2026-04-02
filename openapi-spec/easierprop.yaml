@@ -1,19 +1,16 @@
 openapi: 3.0.3
 info:
   title: Easier Prop REST API
-  version: 1.0.0
+  version: 2.0.0
   description: |
-    MT5 Trading API. Manage multiple broker accounts, execute trades, and query market data.
+    MT5 Trading Infrastructure API. Manage multiple broker accounts, execute trades, stream market data, and administer API keys.
 
-    All endpoints require authentication via `X-API-Key` header or `Authorization: Bearer` header.
+    **Client API** endpoints live under `/api` and require an `X-API-Key` header.
+    **Admin API** endpoints live under `/admin` and require a `Authorization: Bearer <jwt>` header (obtained via `/admin/login`).
 
 servers:
   - url: https://api.easierprop.com
     description: Production
-
-security:
-  - ApiKeyHeader: []
-  - BearerAuth: []
 
 components:
   securitySchemes:
@@ -21,138 +18,168 @@ components:
       type: apiKey
       in: header
       name: X-API-Key
+      description: Client API key (prefixed with `sk_`)
     BearerAuth:
       type: http
       scheme: bearer
+      description: JWT token obtained from POST /admin/login
 
   schemas:
+    # ── Accounts ──────────────────────────────────────────────────────
     Account:
       type: object
       properties:
-        auto_connect:
-          type: boolean
-          example: false
+        id:
+          type: string
+          format: uuid
+          example: "70f60784-20f1-45ba-9a04-8e01c0b810c3"
+        label:
+          type: string
+          example: "ICMarkets Demo"
         broker_host:
           type: string
           example: "mt5-demo.icmarkets.com"
         broker_port:
           type: integer
           example: 443
-        created_at:
+        server_name:
           type: string
-          format: date-time
-        id:
-          type: string
-          format: uuid
-          example: "70f60784-20f1-45ba-9a04-8e01c0b810c3"
-        is_enabled:
-          type: boolean
-          example: true
-        label:
-          type: string
-          example: "ICMarkets Demo"
+          nullable: true
+          example: "ICMarketsSC-Demo"
         mt5_login:
           type: integer
           format: int64
           example: 51234567
+        is_enabled:
+          type: boolean
+          example: true
+        auto_connect:
+          type: boolean
+          example: false
+        hardware_id:
+          type: string
+          nullable: true
+        has_proxy:
+          type: boolean
+          example: false
         session_status:
           type: string
           enum: [connected, disconnected]
           example: "disconnected"
+        created_at:
+          type: string
+          format: date-time
         updated_at:
           type: string
           format: date-time
 
-    AccountSummary:
+    CreateAccountRequest:
       type: object
+      required: [label, mt5_login, password]
       properties:
-        balance:
-          type: number
-          example: 10000.00
-        credit:
-          type: number
-          example: 0.00
-        currency:
+        label:
           type: string
-          example: "USD"
-        equity:
-          type: number
-          example: 10142.50
-        freeMargin:
-          type: number
-          example: 9642.50
-        isInvestor:
-          type: boolean
-          example: false
-        leverage:
-          type: integer
-          example: 100
-        margin:
-          type: number
-          example: 500.00
-        marginLevel:
-          type: number
-          example: 2028.50
-        method:
+          description: Friendly name
+          example: "ICMarkets Demo"
+        broker_host:
           type: string
-          example: "Exchange"
-        profit:
-          type: number
-          example: 142.50
-        type:
-          type: string
-          example: "Hedging"
-
-    AccountDetails:
-      type: object
-      properties:
-        accountLeverage:
-          type: integer
-          example: 100
-        accountMethod:
-          type: string
-          example: "Exchange"
-        accountName:
-          type: string
-          example: "John Doe"
-        accountType:
-          type: string
-          example: "Hedging"
-        company:
-          type: string
-          example: "IC Markets"
-        currency:
-          type: string
-          example: "USD"
-        group:
-          type: string
-          example: "demo\\hedging\\USD"
-        host:
-          type: string
+          description: MT5 broker server hostname or IP
           example: "mt5-demo.icmarkets.com"
-        isInvestor:
-          type: boolean
-          example: false
-        password:
-          type: string
-          example: ""
-        port:
+        broker_port:
           type: integer
+          description: Broker port
+          default: 443
           example: 443
-        serverName:
+        server_name:
           type: string
+          description: MT5 server name (alternative to host/port)
           example: "ICMarketsSC-Demo"
-        serverTime:
-          type: string
-          example: "2026-04-01T12:00:00"
-        serverTimeZone:
-          type: string
-          example: "UTC"
-        user:
+        mt5_login:
           type: integer
           format: int64
+          description: MT5 account number
           example: 51234567
+        password:
+          type: string
+          description: MT5 account password (stored encrypted with AES-256-GCM)
+          example: "MyP@ssw0rd"
+        auto_connect:
+          type: boolean
+          description: Auto-connect on gateway start
+          default: false
+        hardware_id:
+          type: string
+          description: Optional hardware ID for the MT5 terminal
+        proxy_host:
+          type: string
+          description: SOCKS5 proxy hostname
+        proxy_port:
+          type: integer
+          description: SOCKS5 proxy port
+        proxy_user:
+          type: string
+          description: Proxy username
+        proxy_password:
+          type: string
+          description: Proxy password
 
+    UpdateAccountRequest:
+      type: object
+      properties:
+        label:
+          type: string
+        broker_host:
+          type: string
+        broker_port:
+          type: integer
+        server_name:
+          type: string
+        mt5_login:
+          type: integer
+          format: int64
+        password:
+          type: string
+        is_enabled:
+          type: boolean
+        auto_connect:
+          type: boolean
+        hardware_id:
+          type: string
+        proxy_host:
+          type: string
+        proxy_port:
+          type: integer
+        proxy_user:
+          type: string
+        proxy_password:
+          type: string
+
+    # ── Sessions ──────────────────────────────────────────────────────
+    SessionConnect:
+      type: object
+      properties:
+        account_id:
+          type: string
+          format: uuid
+        connected:
+          type: boolean
+          example: true
+
+    SessionStatus:
+      type: object
+      properties:
+        connected:
+          type: boolean
+          example: true
+        connected_since_secs:
+          type: integer
+          nullable: true
+          example: 3421
+        reconnect_count:
+          type: integer
+          example: 0
+
+    # ── Trading ───────────────────────────────────────────────────────
     Order:
       type: object
       description: Full order/position object as returned by the broker
@@ -282,6 +309,154 @@ components:
           type: string
           example: ""
 
+    OrderRequest:
+      type: object
+      required: [symbol, side, type, volume]
+      properties:
+        symbol:
+          type: string
+          description: Trading instrument
+          example: "EURUSD"
+        side:
+          type: string
+          enum: [buy, sell]
+          example: "buy"
+        type:
+          type: string
+          enum: [market, limit, stop, stop_limit]
+          example: "market"
+        volume:
+          type: number
+          description: Lot size
+          example: 0.01
+        price:
+          type: number
+          description: Required for limit/stop orders
+        sl:
+          type: number
+          description: Stop loss price
+        tp:
+          type: number
+          description: Take profit price
+        deviation:
+          type: integer
+          description: Max slippage in points
+        comment:
+          type: string
+          description: Order comment visible in MT5
+
+    ModifyOrderRequest:
+      type: object
+      properties:
+        price:
+          type: number
+          description: New price (pending orders)
+        sl:
+          type: number
+          description: New stop loss
+        tp:
+          type: number
+          description: New take profit
+
+    CloseOrderRequest:
+      type: object
+      properties:
+        volume:
+          type: number
+          description: Partial close volume. Omit to close entirely.
+
+    # ── Account Info ──────────────────────────────────────────────────
+    AccountSummary:
+      type: object
+      properties:
+        balance:
+          type: number
+          example: 10000.00
+        credit:
+          type: number
+          example: 0.00
+        currency:
+          type: string
+          example: "USD"
+        equity:
+          type: number
+          example: 10142.50
+        freeMargin:
+          type: number
+          example: 9642.50
+        isInvestor:
+          type: boolean
+          example: false
+        leverage:
+          type: integer
+          example: 100
+        margin:
+          type: number
+          example: 500.00
+        marginLevel:
+          type: number
+          example: 2028.50
+        method:
+          type: string
+          example: "Exchange"
+        profit:
+          type: number
+          example: 142.50
+        type:
+          type: string
+          example: "Hedging"
+
+    AccountDetails:
+      type: object
+      properties:
+        accountLeverage:
+          type: integer
+          example: 100
+        accountMethod:
+          type: string
+          example: "Exchange"
+        accountName:
+          type: string
+          example: "John Doe"
+        accountType:
+          type: string
+          example: "Hedging"
+        company:
+          type: string
+          example: "IC Markets"
+        currency:
+          type: string
+          example: "USD"
+        group:
+          type: string
+          example: "demo\\hedging\\USD"
+        host:
+          type: string
+          example: "mt5-demo.icmarkets.com"
+        isInvestor:
+          type: boolean
+          example: false
+        password:
+          type: string
+          example: ""
+        port:
+          type: integer
+          example: 443
+        serverName:
+          type: string
+          example: "ICMarketsSC-Demo"
+        serverTime:
+          type: string
+          example: "2026-04-01T12:00:00"
+        serverTimeZone:
+          type: string
+          example: "UTC"
+        user:
+          type: integer
+          format: int64
+          example: 51234567
+
+    # ── Market Data ───────────────────────────────────────────────────
     Quote:
       type: object
       properties:
@@ -304,52 +479,70 @@ components:
           type: number
           example: 0.0
 
-    SessionStatus:
+    OhlcBar:
       type: object
       properties:
-        connected:
-          type: boolean
-          example: true
-        connected_since_secs:
-          type: integer
-          nullable: true
-          example: 3421
-        reconnect_count:
-          type: integer
-          example: 0
-
-    SessionConnect:
-      type: object
-      properties:
-        account_id:
+        time:
           type: string
-          format: uuid
-        connected:
+        open:
+          type: number
+        high:
+          type: number
+        low:
+          type: number
+        close:
+          type: number
+        tickVolume:
+          type: integer
+
+    MarketStatusItem:
+      type: object
+      properties:
+        symbol:
+          type: string
+          example: "EURUSD"
+        tradeable:
           type: boolean
           example: true
+        bid:
+          type: number
+          example: 1.08542
+        ask:
+          type: number
+          example: 1.08544
+        spread_points:
+          type: integer
+          example: 2
+        spread_pips:
+          type: number
+          example: 0.2
+        digits:
+          type: integer
+          example: 5
 
+    # ── Enhanced ──────────────────────────────────────────────────────
     Portfolio:
       type: object
       properties:
         account:
           type: string
           format: uuid
-        position_count:
-          type: integer
-          example: 3
         positions:
           type: array
           items:
             $ref: "#/components/schemas/Order"
-        total_commission:
-          type: number
-          example: -0.21
+        position_count:
+          type: integer
+          example: 3
         total_profit:
           type: number
           example: 142.50
         total_swap:
           type: number
           example: -1.20
+        total_commission:
+          type: number
+          example: -0.21
 
     Risk:
       type: object
@@ -357,135 +550,161 @@ components:
         balance:
           type: number
           example: 10000.00
-        drawdown_from_balance:
-          type: number
-          example: -142.50
-        drawdown_pct:
-          type: number
-          example: 1.42
         equity:
           type: number
           example: 10142.50
-        exposure:
+        margin_used:
           type: number
-          example: 1000.00
-        floating_pl:
-          type: number
-          example: 142.50
+          example: 500.00
         margin_free:
           type: number
           example: 9642.50
         margin_level_pct:
           type: number
           example: 2028.50
-        margin_used:
+        floating_pl:
           type: number
-          example: 500.00
-        position_count:
-          type: integer
-          example: 3
+          example: 142.50
+        drawdown_from_balance:
+          type: number
+          example: -142.50
+        drawdown_pct:
+          type: number
+          example: 1.42
+        exposure:
+          type: array
+          items:
+            type: object
+            properties:
+              symbol:
+                type: string
+                example: "EURUSD"
+              side:
+                type: string
+                example: "buy"
+              lots:
+                type: number
+                example: 0.01
+              profit:
+                type: number
+                example: 3.20
+              positions:
+                type: integer
+                example: 1
         total_lots:
           type: number
           example: 0.03
-
-    MarketStatusItem:
-      type: object
-      properties:
-        ask:
-          type: number
-          example: 1.08544
-        bid:
-          type: number
-          example: 1.08542
-        digits:
+        position_count:
           type: integer
-          example: 5
-        spread_pips:
-          type: number
-          example: 0.2
-        spread_points:
-          type: integer
-          example: 2
-        symbol:
-          type: string
-          example: "EURUSD"
-        tradeable:
-          type: boolean
-          example: true
-
-    MarginCheck:
-      type: object
-      properties:
-        can_trade:
-          type: boolean
-          example: true
-        free_margin:
-          type: number
-          example: 9642.50
-        margin_usage_pct:
-          type: number
-          example: 4.93
-        remaining_after:
-          type: number
-          example: 9142.50
-        required_margin:
-          type: number
-          example: 500.00
-        side:
-          type: string
-          example: "buy"
-        symbol:
-          type: string
-          example: "EURUSD"
-        volume:
-          type: number
-          example: 0.01
+          example: 3
 
     Performance:
       type: object
       properties:
-        avg_loss:
-          type: number
-          example: -25.30
-        avg_trade_duration_secs:
-          type: number
-          example: 3600
-        avg_win:
-          type: number
-          example: 45.20
-        best_trade:
-          type: number
-          example: 120.00
+        total_trades:
+          type: integer
+          example: 11
+        winning_trades:
+          type: integer
+          example: 6
         losing_trades:
           type: integer
           example: 5
+        win_rate:
+          type: number
+          example: 54.5
+        total_profit:
+          type: number
+          example: 269.00
+        total_loss:
+          type: number
+          example: -126.50
         net_profit:
           type: number
           example: 142.50
         profit_factor:
           type: number
           example: 2.13
-        total_loss:
+        avg_win:
           type: number
-          example: -126.50
-        total_profit:
+          example: 45.20
+        avg_loss:
           type: number
-          example: 269.00
-        total_trades:
-          type: integer
-          example: 11
-        win_rate:
+          example: -25.30
+        best_trade:
           type: number
-          example: 54.5
-        winning_trades:
-          type: integer
-          example: 6
+          example: 120.00
         worst_trade:
           type: number
           example: -50.00
+        avg_trade_duration_secs:
+          type: number
+          example: 3600
+
+    MarginCheck:
+      type: object
+      properties:
+        symbol:
+          type: string
+          example: "EURUSD"
+        side:
+          type: string
+          example: "buy"
+        volume:
+          type: number
+          example: 0.01
+        required_margin:
+          type: number
+          example: 500.00
+        free_margin:
+          type: number
+          example: 9642.50
+        can_trade:
+          type: boolean
+          example: true
+        margin_usage_pct:
+          type: number
+          example: 4.93
+        remaining_after:
+          type: number
+          example: 9142.50
+
+    LotCalculation:
+      type: object
+      properties:
+        symbol:
+          type: string
+          example: "EURUSD"
+        lots:
+          type: number
+          example: 0.10
+        risk_dollars:
+          type: number
+          example: 100.00
+        sl_points:
+          type: number
+          example: 100
+        contract_size:
+          type: number
+          example: 100000
+        tick_value:
+          type: number
+          example: 1.0
+        tick_size:
+          type: number
+          example: 0.00001
+        digits:
+          type: integer
+          example: 5
+        current_price:
+          type: number
+          example: 1.08542
+        value_per_point:
+          type: number
+          example: 1.0
 
     PositionDetail:
-      description: Same as Order plus netProfit field
+      description: Order with additional netProfit field
       allOf:
         - $ref: "#/components/schemas/Order"
         - type: object
@@ -497,39 +716,25 @@ components:
     Breakeven:
       type: object
       properties:
-        new_sl:
+        ticket:
+          type: integer
+          format: int64
+          example: 12345678
+        symbol:
+          type: string
+          example: "EURUSD"
+        open_price:
           type: number
           example: 1.08542
         old_sl:
           type: number
           example: 0.0
-        open_price:
+        new_sl:
           type: number
           example: 1.08542
         result:
           type: string
           example: "ok"
-        symbol:
-          type: string
-          example: "EURUSD"
-        ticket:
-          type: integer
-          format: int64
-          example: 12345678
-
-    CopyTrade:
-      type: object
-      properties:
-        failed:
-          type: integer
-          example: 0
-        results:
-          type: array
-          items:
-            $ref: "#/components/schemas/Order"
-        succeeded:
-          type: integer
-          example: 2
 
     CloseAll:
       type: object
@@ -551,6 +756,238 @@ components:
           type: integer
           example: 0
 
+    CopyTradeRequest:
+      type: object
+      required: [account_ids, symbol, side, type, volume]
+      properties:
+        account_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+          description: Target account IDs to place the trade on
+        symbol:
+          type: string
+          example: "EURUSD"
+        side:
+          type: string
+          enum: [buy, sell]
+          example: "buy"
+        type:
+          type: string
+          enum: [market, limit, stop, stop_limit]
+          example: "market"
+        volume:
+          type: number
+          example: 0.01
+        price:
+          type: number
+        sl:
+          type: number
+        tp:
+          type: number
+        comment:
+          type: string
+
+    CopyTradeResult:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+        succeeded:
+          type: integer
+          example: 2
+        failed:
+          type: integer
+          example: 0
+
+    HedgeRequest:
+      type: object
+      required: [prop_account_id, broker_account_id, symbol, direction, prop_lots, broker_lots]
+      properties:
+        prop_account_id:
+          type: string
+          format: uuid
+          description: Prop firm account ID
+        broker_account_id:
+          type: string
+          format: uuid
+          description: Personal broker account ID
+        symbol:
+          type: string
+          example: "EURUSD"
+        direction:
+          type: string
+          enum: [long, short]
+          example: "long"
+        prop_lots:
+          type: number
+          description: Lot size for the prop account
+          example: 0.10
+        broker_lots:
+          type: number
+          description: Lot size for the broker account
+          example: 0.10
+        sl:
+          type: number
+          description: Stop loss price
+        tp:
+          type: number
+          description: Take profit price
+        comment:
+          type: string
+          description: Order comment
+
+    HedgeResult:
+      type: object
+      properties:
+        prop_ticket:
+          type: integer
+          format: int64
+          example: 12345678
+        broker_ticket:
+          type: integer
+          format: int64
+          example: 87654321
+        prop_result:
+          type: object
+        broker_result:
+          type: object
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Hedge placed successfully"
+
+    # ── Admin ─────────────────────────────────────────────────────────
+    AdminLoginRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: "admin"
+        password:
+          type: string
+          example: "s3cret"
+
+    AdminLoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIs..."
+        admin:
+          type: object
+          properties:
+            id:
+              type: integer
+              example: 1
+            username:
+              type: string
+              example: "admin"
+            role:
+              type: string
+              example: "superadmin"
+
+    AdminSeedRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: "superadmin"
+        password:
+          type: string
+          example: "s3cret"
+
+    ApiKey:
+      type: object
+      properties:
+        key:
+          type: string
+          description: Full API key (only returned on creation)
+          example: "sk_live_abc123..."
+        id:
+          type: integer
+          example: 1
+        label:
+          type: string
+          nullable: true
+          example: "Production key"
+        prefix:
+          type: string
+          example: "sk_live_abc"
+        max_accounts:
+          type: integer
+          example: 4
+        admin_id:
+          type: integer
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+
+    CreateApiKeyRequest:
+      type: object
+      properties:
+        label:
+          type: string
+          description: Optional friendly label
+          example: "Production key"
+
+    Admin:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        username:
+          type: string
+          example: "admin"
+        role:
+          type: string
+          enum: [admin, superadmin]
+          example: "admin"
+        max_accounts:
+          type: integer
+          example: 4
+
+    CreateAdminRequest:
+      type: object
+      required: [username, password]
+      properties:
+        username:
+          type: string
+          example: "trader1"
+        password:
+          type: string
+          example: "s3cret"
+        role:
+          type: string
+          enum: [admin, superadmin]
+          default: admin
+        max_accounts:
+          type: integer
+          default: 4
+
+    UpdateAdminRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+          enum: [admin, superadmin]
+        max_accounts:
+          type: integer
+
+    # ── Common ────────────────────────────────────────────────────────
     Error:
       type: object
       properties:
@@ -569,17 +1006,42 @@ components:
 
   responses:
     Unauthorized:
-      description: Invalid or missing API key
+      description: Invalid or missing API key / JWT
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
     NotFound:
-      description: Account not found
+      description: Resource not found
       content:
         application/json:
           schema:
             $ref: "#/components/schemas/Error"
+
+  parameters:
+    accountId:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: Account ID
+    ticket:
+      name: ticket
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+      description: Order/position ticket number
+    symbol:
+      name: symbol
+      in: path
+      required: true
+      schema:
+        type: string
+      description: Instrument name (e.g. EURUSD)
 
 tags:
   - name: Accounts
@@ -588,77 +1050,35 @@ tags:
     description: Control broker connections
   - name: Trading
     description: Place, modify, and close orders
-  - name: Enhanced Trading
-    description: Portfolio, risk, copy-trade, breakeven, close-all, and position details
   - name: Account Info
-    description: Balance, equity, and statistics
+    description: Balance, equity, margin, and statistics
   - name: Market Data
-    description: Symbols, quotes, OHLC history, market status, and margin checks
+    description: Symbols, quotes, OHLC history, and trade sessions
+  - name: Enhanced
+    description: Portfolio, risk, performance, copy-trade, hedge, breakeven, close-all, lot calculator, and position details
+  - name: Admin
+    description: Authentication, API key management, and admin user CRUD
 
 paths:
+  # ════════════════════════════════════════════════════════════════════
+  #  ACCOUNTS
+  # ════════════════════════════════════════════════════════════════════
   /api/accounts:
-    get:
-      operationId: listAccounts
-      tags: [Accounts]
-      summary: List accounts
-      description: Returns all MT5 accounts for the authenticated API key with live session status.
-      responses:
-        "200":
-          description: Account list
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                    example: true
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Account"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-
     post:
       operationId: createAccount
       tags: [Accounts]
       summary: Create account
-      description: Register a new MT5 broker account. Credentials are encrypted at rest with AES-256-GCM. Max 4 accounts per API key.
+      description: |
+        Register a new MT5 broker account. Credentials are encrypted at rest with AES-256-GCM.
+        The account limit is controlled by the API key's `max_accounts` setting.
+      security:
+        - ApiKeyHeader: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [label, broker_host, mt5_login, password]
-              properties:
-                label:
-                  type: string
-                  description: Friendly name
-                  example: "ICMarkets Demo"
-                broker_host:
-                  type: string
-                  description: MT5 broker server hostname or IP
-                  example: "mt5-demo.icmarkets.com"
-                broker_port:
-                  type: integer
-                  description: Broker port
-                  default: 443
-                  example: 443
-                mt5_login:
-                  type: integer
-                  format: int64
-                  description: MT5 account number
-                  example: 51234567
-                password:
-                  type: string
-                  description: MT5 account password (stored encrypted)
-                  example: "MyP@ssw0rd"
-                auto_connect:
-                  type: boolean
-                  description: Auto-connect on gateway start
-                  default: false
+              $ref: "#/components/schemas/CreateAccountRequest"
       responses:
         "200":
           description: Account created
@@ -681,24 +1101,45 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+    get:
+      operationId: listAccounts
+      tags: [Accounts]
+      summary: List accounts
+      description: Returns all MT5 accounts for the authenticated API key with live session status.
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Account list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Account"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /api/accounts/{id}:
     parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-        description: Account ID
+      - $ref: "#/components/parameters/accountId"
 
     get:
       operationId: getAccount
       tags: [Accounts]
       summary: Get account
       description: Returns a single account by ID.
+      security:
+        - ApiKeyHeader: []
       responses:
         "200":
-          description: Account details
+          description: Account
           content:
             application/json:
               schema:
@@ -716,29 +1157,15 @@ paths:
       operationId: updateAccount
       tags: [Accounts]
       summary: Update account
-      description: Update account fields. Only include fields you want to change. Updating credentials disconnects the active session.
+      description: Partial update. Only include fields you want to change. Updating credentials disconnects the active session.
+      security:
+        - ApiKeyHeader: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                label:
-                  type: string
-                broker_host:
-                  type: string
-                broker_port:
-                  type: integer
-                mt5_login:
-                  type: integer
-                  format: int64
-                password:
-                  type: string
-                is_enabled:
-                  type: boolean
-                auto_connect:
-                  type: boolean
+              $ref: "#/components/schemas/UpdateAccountRequest"
       responses:
         "200":
           description: Updated account
@@ -760,6 +1187,8 @@ paths:
       tags: [Accounts]
       summary: Delete account
       description: Permanently delete an account. Disconnects any active session.
+      security:
+        - ApiKeyHeader: []
       responses:
         "200":
           description: Deleted
@@ -774,19 +1203,19 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  # ════════════════════════════════════════════════════════════════════
+  #  SESSIONS
+  # ════════════════════════════════════════════════════════════════════
   /api/accounts/{id}/connect:
     parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+      - $ref: "#/components/parameters/accountId"
     post:
       operationId: connectAccount
       tags: [Sessions]
       summary: Connect
-      description: Explicitly connect to the MT5 broker. Not required — all endpoints auto-connect.
+      description: Explicitly connect to the MT5 broker. Not required since all endpoints auto-connect when needed.
+      security:
+        - ApiKeyHeader: []
       responses:
         "200":
           description: Connected
@@ -809,17 +1238,14 @@ paths:
 
   /api/accounts/{id}/disconnect:
     parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+      - $ref: "#/components/parameters/accountId"
     post:
       operationId: disconnectAccount
       tags: [Sessions]
       summary: Disconnect
       description: Explicitly disconnect from the broker.
+      security:
+        - ApiKeyHeader: []
       responses:
         "200":
           description: Disconnected
@@ -840,17 +1266,14 @@ paths:
 
   /api/accounts/{id}/status:
     parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+      - $ref: "#/components/parameters/accountId"
     get:
       operationId: connectionStatus
       tags: [Sessions]
       summary: Connection status
       description: Check session state without triggering a connect.
+      security:
+        - ApiKeyHeader: []
       responses:
         "200":
           description: Status
@@ -865,14 +1288,12 @@ paths:
                   data:
                     $ref: "#/components/schemas/SessionStatus"
 
+  # ════════════════════════════════════════════════════════════════════
+  #  TRADING
+  # ════════════════════════════════════════════════════════════════════
   /api/accounts/{id}/orders:
     parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+      - $ref: "#/components/parameters/accountId"
 
     post:
       operationId: createOrder
@@ -890,45 +1311,14 @@ paths:
         - `sell` + `stop` = SellStop
         - `buy` + `stop_limit` = BuyStopLimit
         - `sell` + `stop_limit` = SellStopLimit
+      security:
+        - ApiKeyHeader: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [symbol, side, type, volume]
-              properties:
-                symbol:
-                  type: string
-                  description: Trading instrument
-                  example: "EURUSD"
-                side:
-                  type: string
-                  enum: [buy, sell]
-                  example: "buy"
-                type:
-                  type: string
-                  enum: [market, limit, stop, stop_limit]
-                  example: "market"
-                volume:
-                  type: number
-                  description: Lot size
-                  example: 0.01
-                price:
-                  type: number
-                  description: Required for limit/stop orders
-                sl:
-                  type: number
-                  description: Stop loss price
-                tp:
-                  type: number
-                  description: Take profit price
-                deviation:
-                  type: integer
-                  description: Max slippage in points
-                comment:
-                  type: string
-                  description: Order comment visible in MT5
+              $ref: "#/components/schemas/OrderRequest"
       responses:
         "200":
           description: Order result
@@ -954,6 +1344,8 @@ paths:
       tags: [Trading]
       summary: List open orders
       description: Returns all open positions and pending orders.
+      security:
+        - ApiKeyHeader: []
       responses:
         "200":
           description: Open orders
@@ -970,86 +1362,24 @@ paths:
                     items:
                       $ref: "#/components/schemas/Order"
 
-  /api/accounts/{id}/orders/history:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: from
-        in: query
-        required: true
-        schema:
-          type: string
-        description: "Start datetime (YYYY-MM-DDTHH:mm:ss)"
-        example: "2026-01-01T00:00:00"
-      - name: to
-        in: query
-        required: true
-        schema:
-          type: string
-        description: "End datetime (YYYY-MM-DDTHH:mm:ss)"
-        example: "2026-04-01T23:59:59"
-    get:
-      operationId: orderHistory
-      tags: [Trading]
-      summary: Order history
-      description: Returns closed orders within a date range.
-      responses:
-        "200":
-          description: Closed orders
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                    example: true
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Order"
-
   /api/accounts/{id}/orders/{ticket}:
     parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: ticket
-        in: path
-        required: true
-        schema:
-          type: integer
-          format: int64
-        description: Order ticket number
+      - $ref: "#/components/parameters/accountId"
+      - $ref: "#/components/parameters/ticket"
 
     put:
       operationId: modifyOrder
       tags: [Trading]
       summary: Modify order
-      description: Modify an existing open or pending order.
+      description: Modify an existing open or pending order's price, stop loss, or take profit.
+      security:
+        - ApiKeyHeader: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                price:
-                  type: number
-                  description: New price (pending orders)
-                sl:
-                  type: number
-                  description: New stop loss
-                tp:
-                  type: number
-                  description: New take profit
+              $ref: "#/components/schemas/ModifyOrderRequest"
       responses:
         "200":
           description: Modification result
@@ -1069,15 +1399,13 @@ paths:
       tags: [Trading]
       summary: Close order
       description: Close a position or cancel a pending order. Optionally close partial volume.
+      security:
+        - ApiKeyHeader: []
       requestBody:
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                volume:
-                  type: number
-                  description: Partial close volume. Omit to close entirely.
+              $ref: "#/components/schemas/CloseOrderRequest"
       responses:
         "200":
           description: Close result
@@ -1092,19 +1420,59 @@ paths:
                   data:
                     $ref: "#/components/schemas/Order"
 
-  /api/accounts/{id}/summary:
+  /api/accounts/{id}/orders/history:
     parameters:
-      - name: id
-        in: path
+      - $ref: "#/components/parameters/accountId"
+      - name: from
+        in: query
         required: true
         schema:
           type: string
-          format: uuid
+        description: "Start datetime (YYYY-MM-DDTHH:mm:ss)"
+        example: "2026-01-01T00:00:00"
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+        description: "End datetime (YYYY-MM-DDTHH:mm:ss)"
+        example: "2026-04-01T23:59:59"
+    get:
+      operationId: orderHistory
+      tags: [Trading]
+      summary: Order history
+      description: Returns closed orders within a date range.
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Closed orders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Order"
+
+  # ════════════════════════════════════════════════════════════════════
+  #  ACCOUNT INFO
+  # ════════════════════════════════════════════════════════════════════
+  /api/accounts/{id}/summary:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
     get:
       operationId: accountSummary
       tags: [Account Info]
       summary: Account summary
       description: Returns balance, equity, margin, profit, leverage, currency, credit, type, method, and investor flag.
+      security:
+        - ApiKeyHeader: []
       responses:
         "200":
           description: Account summary
@@ -1121,17 +1489,14 @@ paths:
 
   /api/accounts/{id}/details:
     parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+      - $ref: "#/components/parameters/accountId"
     get:
       operationId: accountDetails
       tags: [Account Info]
       summary: Account details
-      description: Returns full account information including name, company, server, and group.
+      description: Returns full account information including name, company, server, group, and timezone.
+      security:
+        - ApiKeyHeader: []
       responses:
         "200":
           description: Account details
@@ -1148,12 +1513,7 @@ paths:
 
   /api/accounts/{id}/equity-history:
     parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+      - $ref: "#/components/parameters/accountId"
       - name: from
         in: query
         required: true
@@ -1166,12 +1526,14 @@ paths:
           type: string
           enum: [H1, H4, D1]
           default: H1
-        description: Timeframe
+        description: Timeframe for equity snapshots
     get:
       operationId: equityHistory
       tags: [Account Info]
       summary: Equity history
-      description: Returns balance and equity over time.
+      description: Returns balance and equity over time at the specified timeframe resolution.
+      security:
+        - ApiKeyHeader: []
       responses:
         "200":
           description: Equity data points
@@ -1190,12 +1552,7 @@ paths:
 
   /api/accounts/{id}/trade-stats:
     parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+      - $ref: "#/components/parameters/accountId"
       - name: from
         in: query
         required: true
@@ -1207,6 +1564,8 @@ paths:
       tags: [Account Info]
       summary: Trade statistics
       description: Returns trading performance metrics including profit factor, win rate, and drawdown.
+      security:
+        - ApiKeyHeader: []
       responses:
         "200":
           description: Trade stats
@@ -1221,19 +1580,312 @@ paths:
                   data:
                     type: object
 
-  /api/accounts/{id}/portfolio:
+  # ════════════════════════════════════════════════════════════════════
+  #  MARKET DATA
+  # ════════════════════════════════════════════════════════════════════
+  /api/accounts/{id}/symbols:
     parameters:
-      - name: id
-        in: path
+      - $ref: "#/components/parameters/accountId"
+    get:
+      operationId: listSymbols
+      tags: [Market Data]
+      summary: List symbols
+      description: Returns all trading instruments available on the broker with full specifications.
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Symbol list with specs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+  /api/accounts/{id}/symbol-names:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+    get:
+      operationId: listSymbolNames
+      tags: [Market Data]
+      summary: List symbol names
+      description: Returns just the symbol name strings. Lightweight alternative to the full symbol list.
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Symbol name list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: string
+                    example: ["EURUSD", "GBPUSD", "USDJPY"]
+
+  /api/accounts/{id}/symbols/{symbol}:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+      - $ref: "#/components/parameters/symbol"
+    get:
+      operationId: symbolParams
+      tags: [Market Data]
+      summary: Symbol details
+      description: Returns full symbol specification including spread, swap rates, margin requirements, and trading sessions.
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Symbol details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+
+  /api/accounts/{id}/symbols/batch:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+    post:
+      operationId: batchSymbols
+      tags: [Market Data]
+      summary: Batch symbol specs
+      description: Returns full specifications for multiple symbols in one request.
+      security:
+        - ApiKeyHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [symbols]
+              properties:
+                symbols:
+                  type: array
+                  items:
+                    type: string
+                  example: ["EURUSD", "GBPUSD", "USDJPY"]
+      responses:
+        "200":
+          description: Symbol specs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+  /api/accounts/{id}/quote/{symbol}:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+      - $ref: "#/components/parameters/symbol"
+    get:
+      operationId: getQuote
+      tags: [Market Data]
+      summary: Get quote
+      description: Returns current bid/ask for a single symbol.
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Quote
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/Quote"
+
+  /api/accounts/{id}/quotes:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+    post:
+      operationId: batchQuotes
+      tags: [Market Data]
+      summary: Batch quotes
+      description: Fetch bid/ask quotes for multiple symbols in one request.
+      security:
+        - ApiKeyHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [symbols]
+              properties:
+                symbols:
+                  type: array
+                  items:
+                    type: string
+                  example: ["EURUSD", "GBPUSD", "USDJPY"]
+      responses:
+        "200":
+          description: Quotes
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Quote"
+
+  /api/accounts/{id}/ohlc/{symbol}:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+      - $ref: "#/components/parameters/symbol"
+      - name: from
+        in: query
         required: true
         schema:
           type: string
-          format: uuid
+        description: "Start datetime (YYYY-MM-DDTHH:mm:ss)"
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+        description: "End datetime (YYYY-MM-DDTHH:mm:ss)"
+      - name: timeframe
+        in: query
+        schema:
+          type: integer
+          default: 60
+        description: "Timeframe in minutes (1=M1, 5=M5, 15=M15, 60=H1, 240=H4, 1440=D1)"
+    get:
+      operationId: getOhlc
+      tags: [Market Data]
+      summary: OHLC by date range
+      description: Returns candlestick data for a symbol within a date range.
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: OHLC bars
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OhlcBar"
+
+  /api/accounts/{id}/ohlc/{symbol}/latest:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+      - $ref: "#/components/parameters/symbol"
+      - name: timeframe
+        in: query
+        schema:
+          type: integer
+          default: 60
+        description: "Timeframe in minutes (1=M1, 5=M5, 15=M15, 60=H1, 240=H4, 1440=D1)"
+      - name: count
+        in: query
+        schema:
+          type: integer
+          default: 100
+        description: Number of bars to return
+    get:
+      operationId: getLatestOhlc
+      tags: [Market Data]
+      summary: Latest OHLC bars
+      description: Returns the last N candlestick bars for a symbol.
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: OHLC bars
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/OhlcBar"
+
+  /api/accounts/{id}/trade-session/{symbol}:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+      - $ref: "#/components/parameters/symbol"
+    get:
+      operationId: tradeSession
+      tags: [Market Data]
+      summary: Trade session
+      description: Returns whether the market is currently open for a symbol.
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Trade session info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+
+  # ════════════════════════════════════════════════════════════════════
+  #  ENHANCED
+  # ════════════════════════════════════════════════════════════════════
+  /api/accounts/{id}/portfolio:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
     get:
       operationId: getPortfolio
-      tags: [Enhanced Trading]
+      tags: [Enhanced]
       summary: Portfolio overview
-      description: Returns all open positions with aggregated profit, swap, and commission totals.
+      description: Returns account summary plus all open positions with aggregated profit, swap, and commission totals.
+      security:
+        - ApiKeyHeader: []
       responses:
         "200":
           description: Portfolio
@@ -1250,20 +1902,17 @@ paths:
 
   /api/accounts/{id}/risk:
     parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+      - $ref: "#/components/parameters/accountId"
     get:
       operationId: getRisk
-      tags: [Enhanced Trading]
-      summary: Risk summary
-      description: Returns real-time risk metrics including drawdown, margin usage, exposure, and floating P&L.
+      tags: [Enhanced]
+      summary: Risk report
+      description: Returns real-time risk metrics including drawdown, margin usage, per-symbol exposure breakdown, and floating P&L.
+      security:
+        - ApiKeyHeader: []
       responses:
         "200":
-          description: Risk summary
+          description: Risk report
           content:
             application/json:
               schema:
@@ -1277,12 +1926,7 @@ paths:
 
   /api/accounts/{id}/performance:
     parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+      - $ref: "#/components/parameters/accountId"
       - name: from
         in: query
         required: true
@@ -1291,9 +1935,11 @@ paths:
         description: "Start datetime (YYYY-MM-DDTHH:mm:ss)"
     get:
       operationId: getPerformance
-      tags: [Enhanced Trading]
+      tags: [Enhanced]
       summary: Performance metrics
-      description: Returns trading performance including win rate, profit factor, average win/loss, and best/worst trades.
+      description: Returns trading performance including win rate, profit factor, average win/loss, best/worst trades, and average trade duration.
+      security:
+        - ApiKeyHeader: []
       responses:
         "200":
           description: Performance
@@ -1308,184 +1954,23 @@ paths:
                   data:
                     $ref: "#/components/schemas/Performance"
 
-  /api/accounts/{id}/positions/{ticket}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: ticket
-        in: path
-        required: true
-        schema:
-          type: integer
-          format: int64
-        description: Position ticket number
-    get:
-      operationId: getPositionDetail
-      tags: [Enhanced Trading]
-      summary: Position detail
-      description: Returns full detail for a single open position, including netProfit (profit + swap + commission).
-      responses:
-        "200":
-          description: Position detail
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                    example: true
-                  data:
-                    $ref: "#/components/schemas/PositionDetail"
-
-  /api/accounts/{id}/positions/{ticket}/breakeven:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: ticket
-        in: path
-        required: true
-        schema:
-          type: integer
-          format: int64
-        description: Position ticket number
-    post:
-      operationId: setBreakeven
-      tags: [Enhanced Trading]
-      summary: Set breakeven
-      description: Move the stop loss to the open price (breakeven) for a position.
-      responses:
-        "200":
-          description: Breakeven result
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                    example: true
-                  data:
-                    $ref: "#/components/schemas/Breakeven"
-
-  /api/accounts/{id}/close-all:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-    post:
-      operationId: closeAllPositions
-      tags: [Enhanced Trading]
-      summary: Close all positions
-      description: Close all open positions for the account. Returns a summary of closed and failed tickets.
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                symbol:
-                  type: string
-                  description: Optional filter to only close positions for a specific symbol
-      responses:
-        "200":
-          description: Close-all result
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                    example: true
-                  data:
-                    $ref: "#/components/schemas/CloseAll"
-
-  /api/accounts/{id}/copy-trade:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-    post:
-      operationId: copyTrade
-      tags: [Enhanced Trading]
-      summary: Copy trade to other accounts
-      description: Copy a trade from this account to one or more target accounts.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [ticket, target_account_ids]
-              properties:
-                ticket:
-                  type: integer
-                  format: int64
-                  description: Source order ticket to copy
-                target_account_ids:
-                  type: array
-                  items:
-                    type: string
-                    format: uuid
-                  description: Target account IDs to copy the trade to
-                volume:
-                  type: number
-                  description: Override lot size (optional, defaults to source volume)
-      responses:
-        "200":
-          description: Copy trade result
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                    example: true
-                  data:
-                    $ref: "#/components/schemas/CopyTrade"
-
   /api/accounts/{id}/market-status:
     parameters:
-      - name: id
-        in: path
+      - $ref: "#/components/parameters/accountId"
+      - name: symbols
+        in: query
         required: true
         schema:
           type: string
-          format: uuid
-    post:
+        description: Comma-separated symbol list
+        example: "EURUSD,GBPUSD,USDJPY"
+    get:
       operationId: marketStatus
-      tags: [Market Data]
+      tags: [Enhanced]
       summary: Market status
-      description: Returns bid, ask, spread, and tradeable status for multiple symbols.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [symbols]
-              properties:
-                symbols:
-                  type: array
-                  items:
-                    type: string
-                  example: ["EURUSD", "GBPUSD", "USDJPY"]
+      description: Returns bid, ask, spread, and tradeable status for the requested symbols.
+      security:
+        - ApiKeyHeader: []
       responses:
         "200":
           description: Market status
@@ -1504,17 +1989,14 @@ paths:
 
   /api/accounts/{id}/margin-check:
     parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+      - $ref: "#/components/parameters/accountId"
     post:
       operationId: marginCheck
-      tags: [Market Data]
+      tags: [Enhanced]
       summary: Margin check
       description: Pre-trade margin check. Returns required margin, remaining free margin, and whether the trade can be placed.
+      security:
+        - ApiKeyHeader: []
       requestBody:
         required: true
         content:
@@ -1547,22 +2029,92 @@ paths:
                   data:
                     $ref: "#/components/schemas/MarginCheck"
 
-  /api/accounts/{id}/symbols:
+  /api/accounts/{id}/lot-calculator:
     parameters:
-      - name: id
-        in: path
+      - $ref: "#/components/parameters/accountId"
+    post:
+      operationId: lotCalculator
+      tags: [Enhanced]
+      summary: Lot calculator
+      description: Calculate the appropriate lot size based on risk in dollars and stop loss distance in points.
+      security:
+        - ApiKeyHeader: []
+      requestBody:
         required: true
-        schema:
-          type: string
-          format: uuid
-    get:
-      operationId: listSymbols
-      tags: [Market Data]
-      summary: List symbols
-      description: Returns all trading instruments available on the broker.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [symbol, side, risk_dollars, sl_points]
+              properties:
+                symbol:
+                  type: string
+                  example: "EURUSD"
+                side:
+                  type: string
+                  enum: [buy, sell]
+                  example: "buy"
+                risk_dollars:
+                  type: number
+                  description: Maximum risk amount in account currency
+                  example: 100.00
+                sl_points:
+                  type: number
+                  description: Stop loss distance in points
+                  example: 100
       responses:
         "200":
-          description: Symbol list
+          description: Lot calculation result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/LotCalculation"
+
+  /api/accounts/{id}/positions/{ticket}:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+      - $ref: "#/components/parameters/ticket"
+    get:
+      operationId: getPositionDetail
+      tags: [Enhanced]
+      summary: Position detail
+      description: Returns full detail for a single open position, including netProfit (profit + swap + commission).
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Position detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/PositionDetail"
+
+  /api/accounts/{id}/positions/{ticket}/fills:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+      - $ref: "#/components/parameters/ticket"
+    get:
+      operationId: getPositionFills
+      tags: [Enhanced]
+      summary: Position fills
+      description: Returns all deals/fills associated with a position ticket.
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Fill list
           content:
             application/json:
               schema:
@@ -1576,100 +2128,20 @@ paths:
                     items:
                       type: object
 
-  /api/accounts/{id}/symbols/{symbol}:
+  /api/accounts/{id}/orders/{ticket}/breakeven:
     parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: symbol
-        in: path
-        required: true
-        schema:
-          type: string
-        description: Instrument name (e.g. EURUSD)
-    get:
-      operationId: symbolParams
-      tags: [Market Data]
-      summary: Symbol details
-      description: Returns full symbol specification including spread, swap rates, margin, and sessions.
-      responses:
-        "200":
-          description: Symbol details
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                    example: true
-                  data:
-                    type: object
-
-  /api/accounts/{id}/quote/{symbol}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: symbol
-        in: path
-        required: true
-        schema:
-          type: string
-    get:
-      operationId: getQuote
-      tags: [Market Data]
-      summary: Get quote
-      description: Returns current bid/ask for a symbol.
-      responses:
-        "200":
-          description: Quote
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                    example: true
-                  data:
-                    $ref: "#/components/schemas/Quote"
-
-  /api/accounts/{id}/quotes:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
+      - $ref: "#/components/parameters/accountId"
+      - $ref: "#/components/parameters/ticket"
     post:
-      operationId: batchQuotes
-      tags: [Market Data]
-      summary: Batch quotes
-      description: Fetch quotes for multiple symbols in one request.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [symbols]
-              properties:
-                symbols:
-                  type: array
-                  items:
-                    type: string
-                  example: ["EURUSD", "GBPUSD", "USDJPY"]
+      operationId: setBreakeven
+      tags: [Enhanced]
+      summary: Set breakeven
+      description: Move the stop loss to the open price (breakeven) for a position.
+      security:
+        - ApiKeyHeader: []
       responses:
         "200":
-          description: Quotes
+          description: Breakeven result
           content:
             application/json:
               schema:
@@ -1679,23 +2151,35 @@ paths:
                     type: boolean
                     example: true
                   data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Quote"
+                    $ref: "#/components/schemas/Breakeven"
 
-  /api/accounts/{id}/ohlc/{symbol}:
+  /api/accounts/{id}/close-all:
     parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - name: symbol
-        in: path
-        required: true
-        schema:
-          type: string
+      - $ref: "#/components/parameters/accountId"
+    post:
+      operationId: closeAllPositions
+      tags: [Enhanced]
+      summary: Close all positions
+      description: Close all open positions for the account. Returns a summary of closed and failed tickets.
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Close-all result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/CloseAll"
+
+  /api/accounts/{id}/orders/history/paginated:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
       - name: from
         in: query
         required: true
@@ -1708,20 +2192,64 @@ paths:
         schema:
           type: string
         description: "End datetime (YYYY-MM-DDTHH:mm:ss)"
-      - name: timeframe
+      - name: page
         in: query
         schema:
           type: integer
-          default: 60
-        description: "Timeframe in minutes (1=M1, 5=M5, 15=M15, 60=H1, 240=H4, 1440=D1)"
+          default: 1
+        description: Page number
+      - name: per_page
+        in: query
+        schema:
+          type: integer
+          default: 50
+        description: Results per page
     get:
-      operationId: getOhlc
-      tags: [Market Data]
-      summary: OHLC price history
-      description: Returns candlestick data for a symbol.
+      operationId: orderHistoryPaginated
+      tags: [Enhanced]
+      summary: Paginated order history
+      description: Returns closed orders within a date range with pagination support.
+      security:
+        - ApiKeyHeader: []
       responses:
         "200":
-          description: OHLC bars
+          description: Paginated order list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+
+  /api/accounts/{id}/orders/history/pending:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+        description: "Start datetime (YYYY-MM-DDTHH:mm:ss)"
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+        description: "End datetime (YYYY-MM-DDTHH:mm:ss)"
+    get:
+      operationId: pendingOrderHistory
+      tags: [Enhanced]
+      summary: Pending order history
+      description: Returns historical pending orders (cancelled, expired, or triggered) within a date range.
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Pending order history
           content:
             application/json:
               schema:
@@ -1733,18 +2261,345 @@ paths:
                   data:
                     type: array
                     items:
-                      type: object
-                      properties:
-                        time:
-                          type: string
-                        open:
-                          type: number
-                        high:
-                          type: number
-                        low:
-                          type: number
-                        close:
-                          type: number
-                        tickVolume:
-                          type: integer
+                      $ref: "#/components/schemas/Order"
 
+  /api/copy-trade:
+    post:
+      operationId: copyTrade
+      tags: [Enhanced]
+      summary: Copy trade
+      description: Place the same trade on multiple accounts simultaneously. Returns per-account results.
+      security:
+        - ApiKeyHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CopyTradeRequest"
+      responses:
+        "200":
+          description: Copy trade result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/CopyTradeResult"
+
+  /api/hedge:
+    post:
+      operationId: hedge
+      tags: [Enhanced]
+      summary: Hedge trade
+      description: |
+        Open opposing positions on a prop account and a personal broker account simultaneously.
+        The prop account gets the directional trade, the broker account gets the opposite side.
+      security:
+        - ApiKeyHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HedgeRequest"
+      responses:
+        "200":
+          description: Hedge result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/HedgeResult"
+
+  # ════════════════════════════════════════════════════════════════════
+  #  ADMIN
+  # ════════════════════════════════════════════════════════════════════
+  /admin/login:
+    post:
+      operationId: adminLogin
+      tags: [Admin]
+      summary: Admin login
+      description: Authenticate with username and password. Returns a JWT token for subsequent admin API calls.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminLoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/AdminLoginResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /admin/seed:
+    post:
+      operationId: adminSeed
+      tags: [Admin]
+      summary: Seed superadmin
+      description: Create the first superadmin account. This endpoint only works once and will fail if a superadmin already exists.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminSeedRequest"
+      responses:
+        "200":
+          description: Superadmin created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+        "409":
+          description: Superadmin already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /admin/keys:
+    post:
+      operationId: createApiKey
+      tags: [Admin]
+      summary: Create API key
+      description: Generate a new API key. The full key is only returned once in the response.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateApiKeyRequest"
+      responses:
+        "200":
+          description: API key created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/ApiKey"
+
+    get:
+      operationId: listApiKeys
+      tags: [Admin]
+      summary: List API keys
+      description: List API keys. Admins see their own keys; superadmins see all keys.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: API key list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ApiKey"
+
+  /admin/keys/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: API key ID
+    delete:
+      operationId: revokeApiKey
+      tags: [Admin]
+      summary: Revoke API key
+      description: Permanently revoke an API key. All accounts associated with this key will no longer be accessible.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Key revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+
+  /admin/accounts:
+    get:
+      operationId: adminListAccounts
+      tags: [Admin]
+      summary: List MT5 accounts (admin)
+      description: List all MT5 accounts belonging to the admin's API keys. Superadmins see all accounts.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Account list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Account"
+
+  /admin/admins:
+    post:
+      operationId: createAdmin
+      tags: [Admin]
+      summary: Create admin
+      description: Create a new admin user. Requires superadmin role.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAdminRequest"
+      responses:
+        "200":
+          description: Admin created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/Admin"
+        "403":
+          description: Requires superadmin role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    get:
+      operationId: listAdmins
+      tags: [Admin]
+      summary: List admins
+      description: List all admin users. Requires superadmin role.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Admin list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Admin"
+
+  /admin/admins/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: Admin user ID
+
+    put:
+      operationId: updateAdmin
+      tags: [Admin]
+      summary: Update admin
+      description: Update an admin user's details. Requires superadmin role.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAdminRequest"
+      responses:
+        "200":
+          description: Admin updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/Admin"
+
+    delete:
+      operationId: deleteAdmin
+      tags: [Admin]
+      summary: Delete admin
+      description: Delete an admin user. Requires superadmin role.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Admin deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
