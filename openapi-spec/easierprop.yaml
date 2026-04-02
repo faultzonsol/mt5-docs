@@ -891,18 +891,7 @@ components:
               example: "admin"
             role:
               type: string
-              example: "superadmin"
-
-    AdminSeedRequest:
-      type: object
-      required: [username, password]
-      properties:
-        username:
-          type: string
-          example: "superadmin"
-        password:
-          type: string
-          example: "s3cret"
+              example: "admin"
 
     ApiKey:
       type: object
@@ -950,7 +939,7 @@ components:
           example: "admin"
         role:
           type: string
-          enum: [admin, superadmin]
+          enum: [admin]
           example: "admin"
         max_accounts:
           type: integer
@@ -968,7 +957,7 @@ components:
           example: "s3cret"
         role:
           type: string
-          enum: [admin, superadmin]
+          enum: [admin]
           default: admin
         max_accounts:
           type: integer
@@ -983,7 +972,7 @@ components:
           type: string
         role:
           type: string
-          enum: [admin, superadmin]
+          enum: [admin]
         max_accounts:
           type: integer
 
@@ -1060,6 +1049,255 @@ tags:
     description: Portfolio, risk, performance, copy-trade, hedge, breakeven, close-all, lot calculator, and position details
 
 paths:
+  # ════════════════════════════════════════════════════════════════════
+  #  ADMIN
+  # ════════════════════════════════════════════════════════════════════
+  /admin/login:
+    post:
+      operationId: adminLogin
+      tags: [Admin]
+      summary: Admin login
+      description: Authenticate with username and password. Returns a JWT token for subsequent admin API calls.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminLoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/AdminLoginResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /admin/keys:
+    post:
+      operationId: createApiKey
+      tags: [Admin]
+      summary: Create API key
+      description: Generate a new API key. The full key is only returned once in the response.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateApiKeyRequest"
+      responses:
+        "200":
+          description: API key created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/ApiKey"
+
+    get:
+      operationId: listApiKeys
+      tags: [Admin]
+      summary: List API keys
+      description: List all API keys.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: API key list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ApiKey"
+
+  /admin/keys/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: API key ID
+    delete:
+      operationId: revokeApiKey
+      tags: [Admin]
+      summary: Revoke API key
+      description: Permanently revoke an API key. All accounts associated with this key will no longer be accessible.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Key revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+
+  /admin/accounts:
+    get:
+      operationId: adminListAccounts
+      tags: [Admin]
+      summary: List MT5 accounts
+      description: List all MT5 accounts.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Account list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Account"
+
+  /admin/admins:
+    post:
+      operationId: createAdmin
+      tags: [Admin]
+      summary: Create admin
+      description: Create a new admin user.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAdminRequest"
+      responses:
+        "200":
+          description: Admin created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/Admin"
+        "403":
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+    get:
+      operationId: listAdmins
+      tags: [Admin]
+      summary: List admins
+      description: List all admin users.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Admin list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Admin"
+
+  /admin/admins/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: integer
+        description: Admin user ID
+
+    put:
+      operationId: updateAdmin
+      tags: [Admin]
+      summary: Update admin
+      description: Update an admin user's details.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAdminRequest"
+      responses:
+        "200":
+          description: Admin updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/Admin"
+
+    delete:
+      operationId: deleteAdmin
+      tags: [Admin]
+      summary: Delete admin
+      description: Delete an admin user.
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Admin deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
   # ════════════════════════════════════════════════════════════════════
   #  ACCOUNTS
   # ════════════════════════════════════════════════════════════════════
@@ -2321,285 +2559,3 @@ paths:
                   data:
                     $ref: "#/components/schemas/HedgeResult"
 
-  # ════════════════════════════════════════════════════════════════════
-  #  ADMIN
-  # ════════════════════════════════════════════════════════════════════
-  /admin/login:
-    post:
-      operationId: adminLogin
-      tags: [Admin]
-      summary: Admin login
-      description: Authenticate with username and password. Returns a JWT token for subsequent admin API calls.
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AdminLoginRequest"
-      responses:
-        "200":
-          description: Login successful
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                    example: true
-                  data:
-                    $ref: "#/components/schemas/AdminLoginResponse"
-        "401":
-          description: Invalid credentials
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-
-  /admin/seed:
-    post:
-      operationId: adminSeed
-      tags: [Admin]
-      summary: Seed superadmin
-      description: Create the first superadmin account. This endpoint only works once and will fail if a superadmin already exists.
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/AdminSeedRequest"
-      responses:
-        "200":
-          description: Superadmin created
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                    example: true
-                  data:
-                    type: object
-        "409":
-          description: Superadmin already exists
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-
-  /admin/keys:
-    post:
-      operationId: createApiKey
-      tags: [Admin]
-      summary: Create API key
-      description: Generate a new API key. The full key is only returned once in the response.
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateApiKeyRequest"
-      responses:
-        "200":
-          description: API key created
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                    example: true
-                  data:
-                    $ref: "#/components/schemas/ApiKey"
-
-    get:
-      operationId: listApiKeys
-      tags: [Admin]
-      summary: List API keys
-      description: List API keys. Admins see their own keys; superadmins see all keys.
-      security:
-        - BearerAuth: []
-      responses:
-        "200":
-          description: API key list
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                    example: true
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/ApiKey"
-
-  /admin/keys/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: integer
-        description: API key ID
-    delete:
-      operationId: revokeApiKey
-      tags: [Admin]
-      summary: Revoke API key
-      description: Permanently revoke an API key. All accounts associated with this key will no longer be accessible.
-      security:
-        - BearerAuth: []
-      responses:
-        "200":
-          description: Key revoked
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                    example: true
-
-  /admin/accounts:
-    get:
-      operationId: adminListAccounts
-      tags: [Admin]
-      summary: List MT5 accounts (admin)
-      description: List all MT5 accounts belonging to the admin's API keys. Superadmins see all accounts.
-      security:
-        - BearerAuth: []
-      responses:
-        "200":
-          description: Account list
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                    example: true
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Account"
-
-  /admin/admins:
-    post:
-      operationId: createAdmin
-      tags: [Admin]
-      summary: Create admin
-      description: Create a new admin user. Requires superadmin role.
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateAdminRequest"
-      responses:
-        "200":
-          description: Admin created
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                    example: true
-                  data:
-                    $ref: "#/components/schemas/Admin"
-        "403":
-          description: Requires superadmin role
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-
-    get:
-      operationId: listAdmins
-      tags: [Admin]
-      summary: List admins
-      description: List all admin users. Requires superadmin role.
-      security:
-        - BearerAuth: []
-      responses:
-        "200":
-          description: Admin list
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                    example: true
-                  data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Admin"
-
-  /admin/admins/{id}:
-    parameters:
-      - name: id
-        in: path
-        required: true
-        schema:
-          type: integer
-        description: Admin user ID
-
-    put:
-      operationId: updateAdmin
-      tags: [Admin]
-      summary: Update admin
-      description: Update an admin user's details. Requires superadmin role.
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateAdminRequest"
-      responses:
-        "200":
-          description: Admin updated
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                    example: true
-                  data:
-                    $ref: "#/components/schemas/Admin"
-
-    delete:
-      operationId: deleteAdmin
-      tags: [Admin]
-      summary: Delete admin
-      description: Delete an admin user. Requires superadmin role.
-      security:
-        - BearerAuth: []
-      responses:
-        "200":
-          description: Admin deleted
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                    example: true
