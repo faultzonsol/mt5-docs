@@ -6,7 +6,7 @@ info:
     MT5 Trading Infrastructure API. Manage multiple broker accounts, execute trades, stream market data, and administer API keys.
 
     **Client API** endpoints live under `/api` and require an `X-API-Key` header.
-    **Admin API** endpoints live under `/admin` and require a `Authorization: Bearer <jwt>` header (obtained via `/admin/login`).
+    **Admin API** endpoints live under `/admin` and accept either a JWT `Authorization: Bearer <jwt>` (obtained via `/admin/login`) or the same `X-API-Key` header used by client endpoints.
 
 servers:
   - url: https://api.easierprop.com
@@ -1046,6 +1046,7 @@ paths:
       description: Generate a new API key. The full key is only returned once in the response.
       security:
         - BearerAuth: []
+        - ApiKeyHeader: []
       requestBody:
         required: true
         content:
@@ -1073,6 +1074,7 @@ paths:
       description: List all API keys.
       security:
         - BearerAuth: []
+        - ApiKeyHeader: []
       responses:
         "200":
           description: API key list
@@ -1104,6 +1106,7 @@ paths:
       description: Permanently revoke an API key. All accounts associated with this key will no longer be accessible.
       security:
         - BearerAuth: []
+        - ApiKeyHeader: []
       responses:
         "200":
           description: Key revoked
@@ -1124,6 +1127,7 @@ paths:
       description: List all MT5 accounts.
       security:
         - BearerAuth: []
+        - ApiKeyHeader: []
       responses:
         "200":
           description: Account list
