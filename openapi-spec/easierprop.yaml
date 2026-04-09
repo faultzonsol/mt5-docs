@@ -2740,3 +2740,101 @@ paths:
                   data:
                     $ref: "#/components/schemas/HedgeResult"
 
+  # ── Broker Search & Demo ──────────────────────────────────────
+  /api/brokers/search:
+    get:
+      operationId: brokerSearch
+      tags: [Enhanced]
+      summary: Search MT5 brokers
+      description: |
+        Search for MT5 broker servers by company name. Returns server names and IP addresses.
+        Use the returned `name` as the `server_name` field when creating an account.
+      security:
+        - ApiKeyHeader: []
+      parameters:
+        - name: company
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Company name to search for
+          example: "pure"
+      responses:
+        "200":
+          description: Broker search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        companyName:
+                          type: string
+                          example: "Pure M Global Limited"
+                        results:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              name:
+                                type: string
+                                description: Server name to use in `server_name` field
+                                example: "PureMGlobal-MT5"
+                              access:
+                                type: array
+                                items:
+                                  type: string
+                                description: List of server IP addresses with ports
+                                example: ["193.30.23.21:443", "36.255.76.101:443"]
+
+  /api/brokers/demo:
+    post:
+      operationId: createDemoAccount
+      tags: [Enhanced]
+      summary: Create demo account
+      description: Create a demo MT5 account on a broker's demo server.
+      security:
+        - ApiKeyHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [company]
+              properties:
+                company:
+                  type: string
+                  description: Broker company name
+                  example: "MetaQuotes"
+                group:
+                  type: string
+                  default: "demo"
+                  description: Server group
+                leverage:
+                  type: integer
+                  default: 100
+                currency:
+                  type: string
+                  default: "USD"
+      responses:
+        "200":
+          description: Demo account created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+
