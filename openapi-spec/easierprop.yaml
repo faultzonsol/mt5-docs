@@ -1249,7 +1249,7 @@ paths:
       operationId: listEas
       tags: [Admin]
       summary: List Expert Advisors
-      description: List all uploaded EAs. Admins see their own; superadmins see all.
+      description: List all uploaded Expert Advisors.
       security:
         - BearerAuth: []
         - ApiKeyHeader: []
@@ -1303,7 +1303,7 @@ paths:
       operationId: deleteEa
       tags: [Admin]
       summary: Delete Expert Advisor
-      description: Permanently delete an EA. Admins can only delete their own; superadmins can delete any.
+      description: Permanently delete an Expert Advisor.
       security:
         - BearerAuth: []
         - ApiKeyHeader: []
