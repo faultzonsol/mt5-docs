@@ -931,6 +931,76 @@ components:
           description: Optional friendly label
           example: "Production key"
 
+    # ── Expert Advisors ──────────────────────────────────────────────
+    UploadEaRequest:
+      type: object
+      required: [name, source, filename]
+      properties:
+        name:
+          type: string
+          description: Display name for the EA
+          example: "MA Crossover"
+        source:
+          type: string
+          description: MQL5 source code content
+          example: "//+------------------------------------------------------------------+\ninput int Period = 14;\nvoid OnTick() { ... }"
+        filename:
+          type: string
+          description: Original filename
+          example: "MACross.mq5"
+
+    EaInputParam:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "InpPeriod"
+        type:
+          type: string
+          example: "int"
+        default:
+          type: string
+          example: "14"
+
+    ExpertAdvisor:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+        admin_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: "MA Crossover"
+        original_name:
+          type: string
+          example: "MACross.mq5"
+        status:
+          type: string
+          enum: [ready, error]
+          example: "ready"
+        input_params:
+          type: array
+          items:
+            $ref: "#/components/schemas/EaInputParam"
+        event_handlers:
+          type: array
+          items:
+            type: string
+          example: ["OnInit", "OnTick", "OnDeinit"]
+        error:
+          type: string
+          description: Error message if status is "error"
+          example: ""
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
 
     # ── Common ────────────────────────────────────────────────────────
     Error:
@@ -1146,6 +1216,112 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Account"
+
+  # ── EA Management ─────────────────────────────────────────────────
+  /admin/eas:
+    post:
+      operationId: uploadEa
+      tags: [Admin]
+      summary: Upload Expert Advisor
+      description: |
+        Upload an MQL5 Expert Advisor (.mq5) file. The source is processed and stored.
+        On success the EA status is `ready`; if processing fails, status is `error` with details in the `error` field.
+      security:
+        - BearerAuth: []
+        - ApiKeyHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadEaRequest"
+      responses:
+        "200":
+          description: EA uploaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/ExpertAdvisor"
+
+    get:
+      operationId: listEas
+      tags: [Admin]
+      summary: List Expert Advisors
+      description: List all uploaded EAs. Admins see their own; superadmins see all.
+      security:
+        - BearerAuth: []
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: EA list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ExpertAdvisor"
+
+  /admin/eas/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: EA ID
+    get:
+      operationId: getEa
+      tags: [Admin]
+      summary: Get Expert Advisor
+      description: Get details of a specific EA.
+      security:
+        - BearerAuth: []
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: EA details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/ExpertAdvisor"
+    delete:
+      operationId: deleteEa
+      tags: [Admin]
+      summary: Delete Expert Advisor
+      description: Permanently delete an EA. Admins can only delete their own; superadmins can delete any.
+      security:
+        - BearerAuth: []
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: EA deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
 
   # ════════════════════════════════════════════════════════════════════
   #  ACCOUNTS
