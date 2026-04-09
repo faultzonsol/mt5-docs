@@ -1067,6 +1067,8 @@ tags:
     description: Balance, equity, margin, and statistics
   - name: Market Data
     description: Symbols, quotes, OHLC history, and trade sessions
+  - name: Expert Advisors
+    description: Upload, run, stop, and monitor MQL5 Expert Advisors on your accounts
   - name: Enhanced
     description: Portfolio, risk, performance, copy-trade, hedge, breakeven, close-all, lot calculator, and position details
 
@@ -1318,6 +1320,164 @@ paths:
                   ok:
                     type: boolean
                     example: true
+
+  # ── EA Execution (Client API) ──────────────────────────────────
+  /api/accounts/{id}/ea/start:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+    post:
+      operationId: startEa
+      tags: [Expert Advisors]
+      summary: Start EA on account
+      description: |
+        Start an Expert Advisor on this account. If another EA is already running, it will be stopped first.
+        The EA runs server-side and trades automatically based on its logic.
+      security:
+        - ApiKeyHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ea_id]
+              properties:
+                ea_id:
+                  type: string
+                  format: uuid
+                  description: ID of the uploaded EA to run
+                symbol:
+                  type: string
+                  default: "EURUSD"
+                  description: Trading symbol
+                timeframe:
+                  type: string
+                  enum: [M1, M5, M15, M30, H1, H4, D1, W1, MN1]
+                  default: "M1"
+                  description: Chart timeframe
+                input_overrides:
+                  type: object
+                  description: Override EA input parameters
+                  example: {"LotSize": 0.02, "StopLoss": 30}
+      responses:
+        "200":
+          description: EA started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      instance_id:
+                        type: string
+                        format: uuid
+                      ea_id:
+                        type: string
+                        format: uuid
+                      ea_name:
+                        type: string
+                        example: "MA Crossover"
+                      account_id:
+                        type: string
+                        format: uuid
+                      symbol:
+                        type: string
+                        example: "EURUSD"
+                      timeframe:
+                        type: string
+                        example: "M1"
+                      status:
+                        type: string
+                        example: "running"
+
+  /api/accounts/{id}/ea/stop:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+    post:
+      operationId: stopEa
+      tags: [Expert Advisors]
+      summary: Stop EA on account
+      description: Stop the currently running Expert Advisor on this account.
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: EA stopped
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      instance_id:
+                        type: string
+                        format: uuid
+                      status:
+                        type: string
+                        example: "stopped"
+
+  /api/accounts/{id}/ea/status:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+    get:
+      operationId: eaStatus
+      tags: [Expert Advisors]
+      summary: EA status on account
+      description: Get the status of the Expert Advisor running (or last run) on this account.
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: EA status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      instance_id:
+                        type: string
+                        format: uuid
+                      ea_id:
+                        type: string
+                        format: uuid
+                      symbol:
+                        type: string
+                        example: "EURUSD"
+                      timeframe:
+                        type: string
+                        example: "M1"
+                      status:
+                        type: string
+                        enum: [running, stopped, none]
+                      tick_count:
+                        type: integer
+                        example: 1542
+                      last_error:
+                        type: string
+                      started_at:
+                        type: string
+                        format: date-time
+                        nullable: true
+                      stopped_at:
+                        type: string
+                        format: date-time
+                        nullable: true
 
   # ════════════════════════════════════════════════════════════════════
   #  ACCOUNTS
