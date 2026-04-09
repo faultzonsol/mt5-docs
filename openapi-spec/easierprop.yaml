@@ -934,20 +934,16 @@ components:
     # ── Expert Advisors ──────────────────────────────────────────────
     UploadEaRequest:
       type: object
-      required: [name, source, filename]
+      required: [name, file]
       properties:
         name:
           type: string
           description: Display name for the EA
           example: "MA Crossover"
-        source:
+        file:
           type: string
-          description: MQL5 source code content
-          example: "//+------------------------------------------------------------------+\ninput int Period = 14;\nvoid OnTick() { ... }"
-        filename:
-          type: string
-          description: Original filename
-          example: "MACross.mq5"
+          format: binary
+          description: The .mq5 file to upload
 
     EaInputParam:
       type: object
@@ -1232,7 +1228,7 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
               $ref: "#/components/schemas/UploadEaRequest"
       responses:
