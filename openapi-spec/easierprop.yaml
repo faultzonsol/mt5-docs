@@ -492,8 +492,22 @@ components:
           type: number
         close:
           type: number
+        volume:
+          type: integer
+          description: |
+            Effective volume for charting. For FX, metals, and crypto instruments
+            the broker never sends real exchange volume, so this field carries
+            `tickVolume` instead (number of price ticks in the bar). For
+            exchange-traded instruments it reflects actual traded volume.
+            Always non-zero — safe to render as a histogram.
         tickVolume:
           type: integer
+          description: Raw tick count as reported by the MT5 broker.
+        realVolume:
+          type: integer
+          description: |
+            Real exchange-traded volume as reported by the broker. Zero for
+            FX/metals/crypto (broker never populates it for OTC instruments).
 
     MarketStatusItem:
       type: object
@@ -519,6 +533,74 @@ components:
         digits:
           type: integer
           example: 5
+
+    SessionWindow:
+      type: object
+      description: A contiguous trading window within a single day.
+      properties:
+        startMin:
+          type: integer
+          description: Window open in minutes since midnight (0–1440)
+          example: 0
+        endMin:
+          type: integer
+          description: Window close in minutes since midnight (0–1440)
+          example: 1440
+        startTime:
+          type: string
+          description: Human-readable open time "HH:MM"
+          example: "00:00"
+        endTime:
+          type: string
+          description: Human-readable close time "HH:MM"
+          example: "24:00"
+
+    SessionDay:
+      type: object
+      properties:
+        day:
+          type: integer
+          description: Day index 0=Sunday … 6=Saturday
+          example: 1
+        name:
+          type: string
+          description: Short day name
+          example: "MON"
+        windows:
+          type: array
+          items:
+            $ref: "#/components/schemas/SessionWindow"
+
+    SymbolSessions:
+      type: object
+      description: |
+        Broker-reported trading and quote session windows for all 7 days of the
+        week. Data is parsed from the MT5 binary protocol; accuracy depends on
+        the broker's server configuration.
+      properties:
+        symbol:
+          type: string
+          example: "EURUSD"
+        quotes:
+          type: array
+          description: Quote session schedule — days when the broker streams prices.
+          items:
+            $ref: "#/components/schemas/SessionDay"
+        trades:
+          type: array
+          description: Trade session schedule — days when orders can be executed.
+          items:
+            $ref: "#/components/schemas/SessionDay"
+        alwaysOpen:
+          type: boolean
+          description: True when the symbol has a single 00:00–24:00 window every day.
+          example: false
+        brokerTzOffsetSecs:
+          type: integer
+          description: |
+            Broker server UTC offset in seconds. All `startMin`/`endMin` values
+            are in broker-local time; apply this offset to convert to UTC.
+          example: 7200
 
     # ── Enhanced ──────────────────────────────────────────────────────
     Portfolio:
@@ -1071,6 +1153,8 @@ tags:
     description: Upload, run, stop, and monitor MQL5 Expert Advisors on your accounts
   - name: Enhanced
     description: Portfolio, risk, performance, copy-trade, hedge, breakeven, close-all, lot calculator, and position details
+  - name: Extended
+    description: Change password, server timezone, symbol sessions, closed positions, mails, tick value, equity stats, and more
 
 paths:
   # ════════════════════════════════════════════════════════════════════
@@ -2209,7 +2293,20 @@ paths:
       operationId: getOhlc
       tags: [Market Data]
       summary: OHLC by date range
-      description: Returns candlestick data for a symbol within a date range.
+      description: |
+        Returns candlestick data for a symbol within a date range, resampled to
+        the requested timeframe.
+
+        **Volume behaviour:** MT5 does not publish real exchange volume for OTC
+        instruments (FX pairs, metals, crypto). For those symbols the `volume`
+        field carries `tickVolume` (price-tick count) so charts never show a
+        flat histogram. `realVolume` preserves the raw broker value (0 for OTC).
+        Exchange-traded instruments (indices, futures) populate `realVolume`
+        normally.
+
+        **Performance:** The gateway fires all required anchor requests to the
+        broker in parallel and drains responses concurrently. Typical latency
+        for a 365-day H1 history is under 1 second.
       security:
         - ApiKeyHeader: []
       responses:
@@ -2739,6 +2836,449 @@ paths:
                     example: true
                   data:
                     $ref: "#/components/schemas/HedgeResult"
+
+  # ── Broker Search & Demo ──────────────────────────────────────
+  # ── Extended Endpoints ─────────────────────────────────────────
+  /api/accounts/{id}/change-password:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+    post:
+      operationId: changePassword
+      tags: [Extended]
+      summary: Change MT5 password
+      description: Change the master or investor password for the MT5 account.
+      security:
+        - ApiKeyHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+                  description: New password
+                is_investor:
+                  type: boolean
+                  default: false
+                  description: If true, changes the investor (read-only) password
+      responses:
+        "200":
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+
+  /api/accounts/{id}/server-timezone:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+    get:
+      operationId: serverTimezone
+      tags: [Extended]
+      summary: Server timezone
+      description: Get the MT5 broker server's timezone.
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Server timezone
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+
+  /api/accounts/{id}/symbols/{symbol}/sessions:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+      - $ref: "#/components/parameters/symbol"
+    get:
+      operationId: symbolSessions
+      tags: [Extended]
+      summary: Symbol trading sessions
+      description: |
+        Returns the full weekly trading and quote session schedule for a symbol,
+        as configured on the broker's MT5 server. Session windows are in
+        broker-local time; use `brokerTzOffsetSecs` to convert to UTC.
+
+        Each day entry lists one or more contiguous windows. Days with no
+        windows mean the market is closed that day. `alwaysOpen` is true when
+        every day has a single full 00:00–24:00 window (e.g. crypto on some
+        brokers).
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Session hours
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/SymbolSessions"
+
+  /api/accounts/{id}/positions/closed:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+        description: "Start datetime (YYYY-MM-DDTHH:mm:ss)"
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+        description: "End datetime (YYYY-MM-DDTHH:mm:ss)"
+    get:
+      operationId: closedPositions
+      tags: [Extended]
+      summary: Closed positions
+      description: Get positions closed within a date range.
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Closed positions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+  /api/accounts/{id}/positions/history:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+    post:
+      operationId: positionsByTickets
+      tags: [Extended]
+      summary: Positions by tickets
+      description: Fetch specific historical positions by their ticket numbers.
+      security:
+        - ApiKeyHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tickets]
+              properties:
+                tickets:
+                  type: array
+                  items:
+                    type: integer
+                    format: int64
+                  example: [12345678, 12345679]
+      responses:
+        "200":
+          description: Position details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+  /api/accounts/{id}/unrealized-pl:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+        description: "Start datetime (YYYY-MM-DDTHH:mm:ss)"
+    get:
+      operationId: unrealizedPl
+      tags: [Extended]
+      summary: Unrealized P&L
+      description: Get unrealized profit/loss data since a given date.
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Unrealized P&L
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+
+  /api/accounts/{id}/orders/closed-session:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+    get:
+      operationId: closedOrdersSession
+      tags: [Extended]
+      summary: Closed orders (current session)
+      description: Get orders closed during the current trading session.
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Closed orders
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+  /api/accounts/{id}/quote-session/{symbol}:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+      - $ref: "#/components/parameters/symbol"
+    get:
+      operationId: quoteSession
+      tags: [Extended]
+      summary: Quote session check
+      description: Check if the symbol is currently in a quote session (market open for quotes).
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Quote session status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+
+  /api/accounts/{id}/mails:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+    get:
+      operationId: mails
+      tags: [Extended]
+      summary: Server mails
+      description: Get messages sent by the MT5 broker server.
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Mail list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+  /api/accounts/{id}/mails/{message_id}:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+      - name: message_id
+        in: path
+        required: true
+        schema:
+          type: integer
+          format: int64
+        description: Message ID as returned by the `/mails` list endpoint
+    get:
+      operationId: mailBody
+      tags: [Extended]
+      summary: Mail body
+      description: |
+        Fetch the full text body of a broker mail message.
+
+        The gateway sends a `SendMailRequest` (protocol type 104) to the MT5
+        server and waits up to 3 seconds for the asynchronous response on the
+        broadcast channel. Returns `504` if the broker does not respond within
+        the deadline.
+
+        Use the `id` field from the `/mails` list to identify messages.
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Mail body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        format: int64
+                        example: 1234567890
+                      subject:
+                        type: string
+                        example: "Account Notice"
+                      from:
+                        type: string
+                        example: "support@broker.com"
+                      body:
+                        type: string
+                        example: "Dear trader, your account has been..."
+                      received:
+                        type: string
+                        format: date-time
+        "504":
+          description: Broker did not respond within the 3-second timeout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/accounts/{id}/tick-value/{symbol}:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+      - $ref: "#/components/parameters/symbol"
+    get:
+      operationId: tickValue
+      tags: [Extended]
+      summary: Tick value
+      description: Get the tick value and tick size for a symbol in the account's currency.
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Tick value
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+
+  /api/accounts/{id}/ohlc/{symbol}/high-low:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+      - $ref: "#/components/parameters/symbol"
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+        description: "Start datetime (YYYY-MM-DDTHH:mm:ss)"
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+        description: "End datetime (YYYY-MM-DDTHH:mm:ss)"
+      - name: timeframe
+        in: query
+        schema:
+          type: integer
+          default: 1440
+        description: Timeframe in minutes (default 1440 = D1)
+    get:
+      operationId: ohlcHighLow
+      tags: [Extended]
+      summary: OHLC high/low
+      description: Get the highest high and lowest low for a symbol within a date range.
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: High/low data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+
+  /api/accounts/{id}/equity-stats:
+    parameters:
+      - $ref: "#/components/parameters/accountId"
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+        description: "Start datetime (YYYY-MM-DDTHH:mm:ss)"
+    get:
+      operationId: equityStats
+      tags: [Extended]
+      summary: Equity stats
+      description: Get combined trade statistics and equity curve since a given date.
+      security:
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Equity stats
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
 
   # ── Broker Search & Demo ──────────────────────────────────────
   /api/brokers/search:
