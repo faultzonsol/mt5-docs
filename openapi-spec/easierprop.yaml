@@ -1231,10 +1231,10 @@ paths:
 
   /admin/seed:
     post:
-      operationId: seedSuperadmin
+      operationId: seedInitialAdmin
       tags: [Admin]
-      summary: Seed first superadmin
-      description: Bootstrap-only endpoint. Creates the first superadmin and returns a JWT only when no superadmin exists yet.
+      summary: Seed first admin
+      description: Bootstrap-only endpoint. Creates the first privileged admin and returns a JWT only when no privileged admin exists yet.
       security: []
       requestBody:
         required: true
@@ -1252,7 +1252,7 @@ paths:
                   example: "s3cret"
       responses:
         "200":
-          description: Superadmin created
+          description: Admin created
           content:
             application/json:
               schema:
@@ -1264,7 +1264,7 @@ paths:
                   data:
                     $ref: "#/components/schemas/AdminLoginResponse"
         "403":
-          description: Superadmin already exists
+          description: Initial admin already exists
           content:
             application/json:
               schema:
@@ -1336,7 +1336,7 @@ paths:
       operationId: updateApiKey
       tags: [Admin]
       summary: Update API key
-      description: Update an API key label and, where allowed, its account cap. Non-superadmin admins can update their own keys; superadmins can update any key.
+      description: Update an API key label and, where allowed, its account cap.
       security:
         - BearerAuth: []
         - ApiKeyHeader: []
@@ -1363,7 +1363,7 @@ paths:
       operationId: revokeApiKey
       tags: [Admin]
       summary: Revoke API key
-      description: Superadmin-only. Permanently revoke an API key. All accounts associated with this key will no longer be accessible.
+      description: Privileged-admin only. Permanently revoke an API key. All accounts associated with this key will no longer be accessible.
       security:
         - BearerAuth: []
         - ApiKeyHeader: []
@@ -1409,7 +1409,7 @@ paths:
       operationId: createAdmin
       tags: [Admin]
       summary: Create admin
-      description: Superadmin-only. Create an admin or superadmin user.
+      description: Privileged-admin only. Create an admin user.
       security:
         - BearerAuth: []
         - ApiKeyHeader: []
@@ -1427,10 +1427,6 @@ paths:
                 password:
                   type: string
                   example: "s3cret"
-                role:
-                  type: string
-                  enum: [admin, superadmin]
-                  default: admin
                 max_accounts:
                   type: integer
                   default: 4
@@ -1451,7 +1447,7 @@ paths:
       operationId: listAdmins
       tags: [Admin]
       summary: List admins
-      description: Superadmin-only. List admins with account caps and billing terms.
+      description: Privileged-admin only. List admins with account caps and billing terms.
       security:
         - BearerAuth: []
         - ApiKeyHeader: []
@@ -1484,7 +1480,7 @@ paths:
       operationId: updateAdmin
       tags: [Admin]
       summary: Update admin
-      description: Superadmin-only. Update username, password, role, active state, or account cap.
+      description: Privileged-admin only. Update username, password, active state, or account cap.
       security:
         - BearerAuth: []
         - ApiKeyHeader: []
@@ -1499,9 +1495,6 @@ paths:
                   type: string
                 password:
                   type: string
-                role:
-                  type: string
-                  enum: [admin, superadmin]
                 is_active:
                   type: boolean
                 max_accounts:
@@ -1523,7 +1516,7 @@ paths:
       operationId: deleteAdmin
       tags: [Admin]
       summary: Delete admin
-      description: Superadmin-only. Delete an admin user. The current superadmin cannot delete themselves.
+      description: Privileged-admin only. Delete an admin user. The current admin cannot delete themselves.
       security:
         - BearerAuth: []
         - ApiKeyHeader: []
@@ -1650,7 +1643,7 @@ paths:
       operationId: listUsageHistory
       tags: [Admin]
       summary: Usage snapshot history
-      description: Superadmin-only. List daily usage snapshots for billing and reporting.
+      description: Privileged-admin only. List daily usage snapshots for billing and reporting.
       security:
         - BearerAuth: []
         - ApiKeyHeader: []
@@ -1694,7 +1687,7 @@ paths:
       operationId: listUsageDates
       tags: [Admin]
       summary: Usage snapshot dates
-      description: Superadmin-only. List dates that have usage snapshots.
+      description: Privileged-admin only. List dates that have usage snapshots.
       security:
         - BearerAuth: []
         - ApiKeyHeader: []
@@ -1720,7 +1713,7 @@ paths:
       operationId: runUsageSnapshot
       tags: [Admin]
       summary: Capture usage snapshot
-      description: Superadmin-only. Capture today's usage snapshot or optionally recapture a supplied date.
+      description: Privileged-admin only. Capture today's usage snapshot or optionally recapture a supplied date.
       security:
         - BearerAuth: []
         - ApiKeyHeader: []
@@ -1766,7 +1759,7 @@ paths:
       operationId: updateBillingTerms
       tags: [Admin]
       summary: Update billing terms
-      description: Superadmin-only. Update per-admin billing terms used by invoice generation.
+      description: Privileged-admin only. Update per-admin billing terms used by invoice generation.
       security:
         - BearerAuth: []
         - ApiKeyHeader: []
@@ -1814,7 +1807,7 @@ paths:
       operationId: generateInvoice
       tags: [Admin]
       summary: Generate invoice data
-      description: Superadmin-only. Generate live period-aware invoice data for one admin and calendar month.
+      description: Privileged-admin only. Generate live period-aware invoice data for one admin and calendar month.
       security:
         - BearerAuth: []
         - ApiKeyHeader: []
