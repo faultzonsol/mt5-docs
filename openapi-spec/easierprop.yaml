@@ -18,7 +18,13 @@ components:
       type: apiKey
       in: header
       name: X-API-Key
-      description: Client API key (prefixed with `sk_`)
+      description: |
+        Client API key (prefixed with `sk_`). On `/api/*` endpoints the key
+        is scoped to its own MT5 accounts. On `/admin/*` endpoints the key
+        identifies its **owning admin** and grants access to all of that
+        admin's keys — so any of your `sk_` works to manage any of your
+        other keys (cross-admin operations are rejected as `400 Key not
+        found`).
     BearerAuth:
       type: http
       scheme: bearer
@@ -1044,10 +1050,30 @@ components:
           example: "Production key"
         max_accounts:
           type: integer
-          description: Configurable account cap for this key. Partners can self-service values from 1 to 1000.
+          description: |
+            Account cap for this key. Partners may **raise** this value to
+            authorize Extra Accounts (sub-accounts beyond the contract default).
+            Partners cannot **lower** the value — the cap is monotonic to
+            prevent masking previously authorized extras before billing
+            capture. To reduce the cap, contact support or revoke and reissue
+            the key.
           minimum: 1
           maximum: 1000
           example: 8
+
+    RaiseMaxAccountsRequest:
+      type: object
+      required: [max_accounts]
+      properties:
+        max_accounts:
+          type: integer
+          description: |
+            New cap value. Must be strictly greater than the key's current
+            `max_accounts`. The endpoint is raise-only by design — it never
+            accepts equal or lower values.
+          minimum: 1
+          maximum: 1000
+          example: 5
 
     # ── Expert Advisors ──────────────────────────────────────────────
     UploadEaRequest:
@@ -1295,7 +1321,12 @@ paths:
       operationId: updateApiKey
       tags: [Admin]
       summary: Update API key
-      description: Update an API key label and, where allowed, its account cap.
+      description: |
+        Update an API key's label and/or `max_accounts` cap. Partners may
+        only raise `max_accounts`; lowering it requires privileged admin action. For the
+        most common case (raising the cap to authorize Extra Accounts),
+        prefer `POST /admin/keys/{id}/max-accounts` which expresses intent
+        explicitly and rejects accidental no-ops.
       security:
         - BearerAuth: []
         - ApiKeyHeader: []
@@ -1337,6 +1368,84 @@ paths:
                   ok:
                     type: boolean
                     example: true
+
+  /admin/keys/{id}/max-accounts:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: API key ID
+    post:
+      operationId: raiseApiKeyMaxAccounts
+      tags: [Admin]
+      summary: Raise max sub-accounts for a key
+      description: |
+        Authorize additional Extra Accounts on an existing key by raising its
+        `max_accounts` cap. **Strictly raise-only**: the request is rejected
+        if the new value is less than or equal to the current `max_accounts`.
+
+        ### Authentication
+        Use either:
+        - the dashboard JWT (`Authorization: Bearer <jwt>`), or
+        - **any** of your `sk_` API keys (`X-API-Key: sk_…`)
+
+        Auth is **admin-scoped, not key-scoped**: an `sk_` identifies the
+        admin who owns it, so any of your `sk_` keys can manage any of your
+        other keys. For example, using the `sk_` of "user A" to raise the
+        cap on the key of "user B" works as long as both keys belong to
+        the same admin. An `sk_` from a different admin returns
+        `400 Key not found` (the response purposely doesn't distinguish
+        "exists but not yours" from "doesn't exist").
+
+        ### Billing impact
+        Extras are billed based on actual sub-accounts attached, so raising
+        the cap by itself does not generate a charge — you only pay once a
+        sub-account beyond the included threshold is actually created.
+
+        ### Example
+        ```bash
+        curl -X POST https://api.easierprop.com/admin/keys/{id}/max-accounts \
+          -H 'X-API-Key: sk_…' \
+          -H 'Content-Type: application/json' \
+          -d '{"max_accounts": 6}'
+        ```
+      security:
+        - BearerAuth: []
+        - ApiKeyHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RaiseMaxAccountsRequest"
+      responses:
+        "200":
+          description: Cap raised
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/ApiKey"
+        "400":
+          description: |
+            Invalid request — either the value is out of range (1–1000) or it
+            is not strictly greater than the current `max_accounts`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /admin/accounts:
     get:
