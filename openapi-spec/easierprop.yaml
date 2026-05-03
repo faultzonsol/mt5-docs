@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
   title: Easier Prop REST API
-  version: 2.0.0
+  version: 2.1.0
   description: |
-    MT5 Trading Infrastructure API. Manage multiple broker accounts, execute trades, stream market data, and administer API keys.
+    MT5 Trading Infrastructure API. Manage multiple broker accounts, execute trades, stream market data, and administer API keys, admins, usage, and billing terms.
 
     **Client API** endpoints live under `/api` and require an `X-API-Key` header.
     **Admin API** endpoints live under `/admin` and accept either a JWT `Authorization: Bearer <jwt>` (obtained via `/admin/login`) or the same `X-API-Key` header used by client endpoints.
@@ -607,8 +607,8 @@ components:
       type: object
       properties:
         account:
-          type: string
-          format: uuid
+          type: object
+          description: Account summary object returned by the broker
         positions:
           type: array
           items:
@@ -649,7 +649,7 @@ components:
           example: 142.50
         drawdown_from_balance:
           type: number
-          example: -142.50
+          example: 142.50
         drawdown_pct:
           type: number
           example: 1.42
@@ -700,7 +700,7 @@ components:
           example: 269.00
         total_loss:
           type: number
-          example: -126.50
+          example: 126.50
         net_profit:
           type: number
           example: 142.50
@@ -712,7 +712,7 @@ components:
           example: 45.20
         avg_loss:
           type: number
-          example: -25.30
+          example: 25.30
         best_trade:
           type: number
           example: 120.00
@@ -815,8 +815,8 @@ components:
           type: number
           example: 1.08542
         result:
-          type: string
-          example: "ok"
+          type: object
+          description: Upstream order modification result
 
     CloseAll:
       type: object
@@ -824,13 +824,31 @@ components:
         closed:
           type: array
           items:
-            type: integer
-            format: int64
-          example: [12345678, 12345679]
+            type: object
+            properties:
+              ticket:
+                type: integer
+                format: int64
+              symbol:
+                type: string
+              result:
+                type: object
+          example:
+            - ticket: 12345678
+              symbol: "EURUSD"
+              result: {}
         failed:
           type: array
           items:
             type: object
+            properties:
+              ticket:
+                type: integer
+                format: int64
+              symbol:
+                type: string
+              result:
+                type: object
         total_closed:
           type: integer
           example: 2
@@ -942,7 +960,7 @@ components:
           example: true
         message:
           type: string
-          example: "Hedge placed successfully"
+          example: "Both orders executed"
 
     # ── Admin ─────────────────────────────────────────────────────────
     AdminLoginRequest:
@@ -966,8 +984,9 @@ components:
           type: object
           properties:
             id:
-              type: integer
-              example: 1
+              type: string
+              format: uuid
+              example: "70f60784-20f1-45ba-9a04-8e01c0b810c3"
             username:
               type: string
               example: "admin"
@@ -983,8 +1002,9 @@ components:
           description: Full API key (only returned on creation)
           example: "sk_live_abc123..."
         id:
-          type: integer
-          example: 1
+          type: string
+          format: uuid
+          example: "70f60784-20f1-45ba-9a04-8e01c0b810c3"
         label:
           type: string
           nullable: true
@@ -999,8 +1019,10 @@ components:
           type: boolean
           example: true
         admin_id:
-          type: integer
-          example: 1
+          type: string
+          format: uuid
+          nullable: true
+          example: "2c0f8d1c-8211-4b67-8ef6-1d8c0f610c3a"
         created_at:
           type: string
           format: date-time
@@ -1012,6 +1034,20 @@ components:
           type: string
           description: Optional friendly label
           example: "Production key"
+
+    UpdateApiKeyRequest:
+      type: object
+      properties:
+        label:
+          type: string
+          description: Optional friendly label
+          example: "Production key"
+        max_accounts:
+          type: integer
+          description: Configurable account cap for this key. Partners can self-service values from 1 to 1000.
+          minimum: 1
+          maximum: 1000
+          example: 8
 
     # ── Expert Advisors ──────────────────────────────────────────────
     UploadEaRequest:
@@ -1193,6 +1229,47 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /admin/seed:
+    post:
+      operationId: seedSuperadmin
+      tags: [Admin]
+      summary: Seed first superadmin
+      description: Bootstrap-only endpoint. Creates the first superadmin and returns a JWT only when no superadmin exists yet.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  example: "admin"
+                password:
+                  type: string
+                  example: "s3cret"
+      responses:
+        "200":
+          description: Superadmin created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/AdminLoginResponse"
+        "403":
+          description: Superadmin already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /admin/keys:
     post:
       operationId: createApiKey
@@ -1252,13 +1329,41 @@ paths:
         in: path
         required: true
         schema:
-          type: integer
+          type: string
+          format: uuid
         description: API key ID
+    put:
+      operationId: updateApiKey
+      tags: [Admin]
+      summary: Update API key
+      description: Update an API key label and, where allowed, its account cap. Non-superadmin admins can update their own keys; superadmins can update any key.
+      security:
+        - BearerAuth: []
+        - ApiKeyHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateApiKeyRequest"
+      responses:
+        "200":
+          description: Key updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: "#/components/schemas/ApiKey"
     delete:
       operationId: revokeApiKey
       tags: [Admin]
       summary: Revoke API key
-      description: Permanently revoke an API key. All accounts associated with this key will no longer be accessible.
+      description: Superadmin-only. Permanently revoke an API key. All accounts associated with this key will no longer be accessible.
       security:
         - BearerAuth: []
         - ApiKeyHeader: []
@@ -1298,6 +1403,141 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Account"
+
+  /admin/admins:
+    post:
+      operationId: createAdmin
+      tags: [Admin]
+      summary: Create admin
+      description: Superadmin-only. Create an admin or superadmin user.
+      security:
+        - BearerAuth: []
+        - ApiKeyHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                  example: "partner"
+                password:
+                  type: string
+                  example: "s3cret"
+                role:
+                  type: string
+                  enum: [admin, superadmin]
+                  default: admin
+                max_accounts:
+                  type: integer
+                  default: 4
+      responses:
+        "200":
+          description: Admin created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+    get:
+      operationId: listAdmins
+      tags: [Admin]
+      summary: List admins
+      description: Superadmin-only. List admins with account caps and billing terms.
+      security:
+        - BearerAuth: []
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Admin list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+  /admin/admins/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Admin ID
+    put:
+      operationId: updateAdmin
+      tags: [Admin]
+      summary: Update admin
+      description: Superadmin-only. Update username, password, role, active state, or account cap.
+      security:
+        - BearerAuth: []
+        - ApiKeyHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+                role:
+                  type: string
+                  enum: [admin, superadmin]
+                is_active:
+                  type: boolean
+                max_accounts:
+                  type: integer
+      responses:
+        "200":
+          description: Admin updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+    delete:
+      operationId: deleteAdmin
+      tags: [Admin]
+      summary: Delete admin
+      description: Superadmin-only. Delete an admin user. The current superadmin cannot delete themselves.
+      security:
+        - BearerAuth: []
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Admin deleted
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
 
   # ── EA Management ─────────────────────────────────────────────────
   /admin/eas:
@@ -1404,6 +1644,208 @@ paths:
                   ok:
                     type: boolean
                     example: true
+
+  /admin/usage/history:
+    get:
+      operationId: listUsageHistory
+      tags: [Admin]
+      summary: Usage snapshot history
+      description: Superadmin-only. List daily usage snapshots for billing and reporting.
+      security:
+        - BearerAuth: []
+        - ApiKeyHeader: []
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+          description: Start date (YYYY-MM-DD). Defaults to 90 days ago.
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+          description: End date (YYYY-MM-DD). Defaults to today.
+        - name: admin_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Optional admin filter
+      responses:
+        "200":
+          description: Usage snapshots
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+
+  /admin/usage/dates:
+    get:
+      operationId: listUsageDates
+      tags: [Admin]
+      summary: Usage snapshot dates
+      description: Superadmin-only. List dates that have usage snapshots.
+      security:
+        - BearerAuth: []
+        - ApiKeyHeader: []
+      responses:
+        "200":
+          description: Snapshot dates
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: string
+                      format: date
+
+  /admin/usage/snapshot:
+    post:
+      operationId: runUsageSnapshot
+      tags: [Admin]
+      summary: Capture usage snapshot
+      description: Superadmin-only. Capture today's usage snapshot or optionally recapture a supplied date.
+      security:
+        - BearerAuth: []
+        - ApiKeyHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                date:
+                  type: string
+                  format: date
+                  description: Snapshot date. Defaults to today.
+                force:
+                  type: boolean
+                  default: false
+                  description: Delete and recapture the existing snapshot for the date.
+      responses:
+        "200":
+          description: Snapshot captured
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+
+  /admin/billing/terms/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+        description: Admin ID
+    put:
+      operationId: updateBillingTerms
+      tags: [Admin]
+      summary: Update billing terms
+      description: Superadmin-only. Update per-admin billing terms used by invoice generation.
+      security:
+        - BearerAuth: []
+        - ApiKeyHeader: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tier1_user_price_cents:
+                  type: integer
+                tier2_user_price_cents:
+                  type: integer
+                tier1_threshold:
+                  type: integer
+                tier1_extra_account_price_cents:
+                  type: integer
+                tier2_extra_account_price_cents:
+                  type: integer
+                included_accounts_per_user:
+                  type: integer
+                billing_currency:
+                  type: string
+                  example: "EUR"
+                billing_company_name:
+                  type: string
+                  nullable: true
+      responses:
+        "200":
+          description: Billing terms updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+
+  /admin/billing/invoice:
+    get:
+      operationId: generateInvoice
+      tags: [Admin]
+      summary: Generate invoice data
+      description: Superadmin-only. Generate live period-aware invoice data for one admin and calendar month.
+      security:
+        - BearerAuth: []
+        - ApiKeyHeader: []
+      parameters:
+        - name: admin_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: string
+            pattern: "^\\d{4}-\\d{2}$"
+          description: Invoice month in YYYY-MM format
+          example: "2026-05"
+      responses:
+        "200":
+          description: Invoice data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
 
   # ── EA Execution (Client API) ──────────────────────────────────
   /api/accounts/{id}/ea/start:
@@ -2339,7 +2781,7 @@ paths:
         in: query
         schema:
           type: integer
-          default: 100
+          default: 200
         description: Number of bars to return
     get:
       operationId: getLatestOhlc
@@ -2712,7 +3154,7 @@ paths:
         in: query
         schema:
           type: integer
-          default: 1
+          default: 0
         description: Page number
       - name: per_page
         in: query
@@ -3120,68 +3562,6 @@ paths:
                     items:
                       type: object
 
-  /api/accounts/{id}/mails/{message_id}:
-    parameters:
-      - $ref: "#/components/parameters/accountId"
-      - name: message_id
-        in: path
-        required: true
-        schema:
-          type: integer
-          format: int64
-        description: Message ID as returned by the `/mails` list endpoint
-    get:
-      operationId: mailBody
-      tags: [Extended]
-      summary: Mail body
-      description: |
-        Fetch the full text body of a broker mail message.
-
-        The gateway sends a `SendMailRequest` (protocol type 104) to the MT5
-        server and waits up to 3 seconds for the asynchronous response on the
-        broadcast channel. Returns `504` if the broker does not respond within
-        the deadline.
-
-        Use the `id` field from the `/mails` list to identify messages.
-      security:
-        - ApiKeyHeader: []
-      responses:
-        "200":
-          description: Mail body
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok:
-                    type: boolean
-                    example: true
-                  data:
-                    type: object
-                    properties:
-                      id:
-                        type: integer
-                        format: int64
-                        example: 1234567890
-                      subject:
-                        type: string
-                        example: "Account Notice"
-                      from:
-                        type: string
-                        example: "support@broker.com"
-                      body:
-                        type: string
-                        example: "Dear trader, your account has been..."
-                      received:
-                        type: string
-                        format: date-time
-        "504":
-          description: Broker did not respond within the 3-second timeout
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Error"
-
   /api/accounts/{id}/tick-value/{symbol}:
     parameters:
       - $ref: "#/components/parameters/accountId"
@@ -3284,13 +3664,12 @@ paths:
   /api/brokers/search:
     get:
       operationId: brokerSearch
-      tags: [Enhanced]
+      tags: [Extended]
       summary: Search MT5 brokers
       description: |
         Search for MT5 broker servers by company name. Returns server names and IP addresses.
         Use the returned `name` as the `server_name` field when creating an account.
-      security:
-        - ApiKeyHeader: []
+      security: []
       parameters:
         - name: company
           in: query
@@ -3337,11 +3716,10 @@ paths:
   /api/brokers/demo:
     post:
       operationId: createDemoAccount
-      tags: [Enhanced]
+      tags: [Extended]
       summary: Create demo account
       description: Create a demo MT5 account on a broker's demo server.
-      security:
-        - ApiKeyHeader: []
+      security: []
       requestBody:
         required: true
         content:
@@ -3377,4 +3755,3 @@ paths:
                     example: true
                   data:
                     type: object
-

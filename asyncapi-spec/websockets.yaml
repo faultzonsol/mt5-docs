@@ -4,8 +4,9 @@ info:
   version: 1.0.0
   description: |
     Real-time WebSocket API for MT5 trading data.
-    Subscribe to channels to receive live quotes, order updates, profit/equity changes,
-    heartbeats, new position events, price/spread/P&L alerts, and aggregate feeds.
+    Subscribe to streams to receive live quotes, order updates, profit/equity changes,
+    heartbeats, new position events, OHLC candles, order-book updates, tick-value
+    updates, price/spread/P&L alerts, and aggregate delivery across accounts.
     Supports multi-account streaming on a single connection.
 
 servers:
@@ -94,20 +95,64 @@ channels:
       event:
         $ref: "#/components/messages/NewPositionEvent"
 
-  aggregate:
+  ohlc:
     address: /ws
-    title: "Aggregate Feed"
+    title: "OHLC Updates"
     description: |
-      Combined feed that delivers quotes, orders, and profit updates in a single subscription.
-      Useful when you want all event types without multiple subscribe calls.
+      Live OHLC candle updates for one symbol. The gateway reuses `interval_ms`
+      as the requested timeframe in minutes.
 
-      **Channel name:** `aggregate`
-      **Required:** `account_id`, `symbols` (for quote data)
+      **Channel name:** `ohlc`
+      **Required:** `account_id`, first item in `symbols`
     messages:
       subscribe:
         $ref: "#/components/messages/SubscribeMessage"
       event:
-        $ref: "#/components/messages/QuoteEvent"
+        $ref: "#/components/messages/OhlcEvent"
+
+  order_book:
+    address: /ws
+    title: "Order Book"
+    description: |
+      Market depth / order book updates for subscribed symbols.
+
+      **Channel name:** `order_book`
+      **Required:** `account_id`, `symbols`
+      **Default interval:** 500ms
+    messages:
+      subscribe:
+        $ref: "#/components/messages/SubscribeMessage"
+      event:
+        $ref: "#/components/messages/OrderBookEvent"
+
+  tick_value:
+    address: /ws
+    title: "Tick Value"
+    description: |
+      Tick value updates for one symbol.
+
+      **Channel name:** `tick_value`
+      **Required:** `account_id`, first item in `symbols`
+      **Default interval:** 500ms
+    messages:
+      subscribe:
+        $ref: "#/components/messages/SubscribeMessage"
+      event:
+        $ref: "#/components/messages/TickValueEvent"
+
+  aggregate:
+    address: /ws
+    title: "Aggregate Feed"
+    description: |
+      Cross-account aggregate delivery. Clients send `subscribe_aggregate`
+      with a `channels` array instead of the normal per-account `subscribe`
+      message. Events are emitted as `aggregate` messages with `account_id`,
+      `channel`, and `data`.
+    messages:
+      subscribe:
+        $ref: "#/components/messages/SubscribeAggregateMessage"
+      event:
+        $ref: "#/components/messages/AggregateEvent"
 
 operations:
   subscribeQuotes:
@@ -190,6 +235,54 @@ operations:
     messages:
       - $ref: "#/channels/new_position/messages/event"
 
+  subscribeOhlc:
+    action: receive
+    channel:
+      $ref: "#/channels/ohlc"
+    summary: Subscribe to OHLC updates
+    messages:
+      - $ref: "#/channels/ohlc/messages/subscribe"
+
+  receiveOhlc:
+    action: send
+    channel:
+      $ref: "#/channels/ohlc"
+    summary: Receive OHLC updates
+    messages:
+      - $ref: "#/channels/ohlc/messages/event"
+
+  subscribeOrderBook:
+    action: receive
+    channel:
+      $ref: "#/channels/order_book"
+    summary: Subscribe to order book updates
+    messages:
+      - $ref: "#/channels/order_book/messages/subscribe"
+
+  receiveOrderBook:
+    action: send
+    channel:
+      $ref: "#/channels/order_book"
+    summary: Receive order book updates
+    messages:
+      - $ref: "#/channels/order_book/messages/event"
+
+  subscribeTickValue:
+    action: receive
+    channel:
+      $ref: "#/channels/tick_value"
+    summary: Subscribe to tick value updates
+    messages:
+      - $ref: "#/channels/tick_value/messages/subscribe"
+
+  receiveTickValue:
+    action: send
+    channel:
+      $ref: "#/channels/tick_value"
+    summary: Receive tick value updates
+    messages:
+      - $ref: "#/channels/tick_value/messages/event"
+
   subscribeAggregate:
     action: receive
     channel:
@@ -229,7 +322,7 @@ components:
             const: subscribe
           channel:
             type: string
-            enum: [quotes, orders, profit, heartbeat, new_position, aggregate]
+            enum: [quotes, orders, profit, heartbeat, new_position, ohlc, order_book, tick_value]
             description: Channel to subscribe to
           account_id:
             type: string
@@ -239,12 +332,12 @@ components:
             type: array
             items:
               type: string
-            description: Required for quotes and aggregate channels
+            description: Required for quotes and order_book. For ohlc and tick_value, the first symbol is used.
             examples:
               - ["EURUSD", "GBPUSD"]
           interval_ms:
             type: integer
-            description: Minimum milliseconds between updates
+            description: Minimum milliseconds between updates. For ohlc, this value is interpreted as timeframe in minutes.
             default: 500
         examples:
           - type: subscribe
@@ -252,6 +345,45 @@ components:
             account_id: "70f60784-20f1-45ba-9a04-8e01c0b810c3"
             symbols: ["EURUSD", "GBPUSD"]
             interval_ms: 500
+
+    SubscribeAggregateMessage:
+      name: subscribe_aggregate
+      title: Subscribe Aggregate
+      summary: Subscribe to aggregate delivery across all accounts owned by the API key
+      contentType: application/json
+      payload:
+        type: object
+        required: [type, channels]
+        properties:
+          type:
+            type: string
+            const: subscribe_aggregate
+          channels:
+            type: array
+            items:
+              type: string
+              enum: [quotes, orders, profit, heartbeat, new_position, ohlc, order_book, tick_value]
+            description: Underlying streams to merge into aggregate events
+          interval_ms:
+            type: integer
+            default: 500
+        examples:
+          - type: subscribe_aggregate
+            channels: [orders, profit]
+            interval_ms: 1000
+
+    UnsubscribeAggregateMessage:
+      name: unsubscribe_aggregate
+      title: Unsubscribe Aggregate
+      summary: Stop aggregate delivery
+      contentType: application/json
+      payload:
+        type: object
+        required: [type]
+        properties:
+          type:
+            type: string
+            const: unsubscribe_aggregate
 
     QuoteEvent:
       name: quote
@@ -418,6 +550,81 @@ components:
             type: object
             description: Full order object for the new position
 
+    OhlcEvent:
+      name: ohlc
+      title: OHLC Update
+      summary: Live OHLC candle update
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            const: ohlc
+          account_id:
+            type: string
+            format: uuid
+          data:
+            type: object
+            description: Upstream OHLC payload
+
+    OrderBookEvent:
+      name: order_book
+      title: Order Book Update
+      summary: Live market depth / order book update
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            const: order_book
+          account_id:
+            type: string
+            format: uuid
+          data:
+            type: object
+            description: Upstream order book payload
+
+    TickValueEvent:
+      name: tick_value
+      title: Tick Value Update
+      summary: Live tick value update
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            const: tick_value
+          account_id:
+            type: string
+            format: uuid
+          data:
+            type: object
+            description: Upstream tick value payload
+
+    AggregateEvent:
+      name: aggregate
+      title: Aggregate Event
+      summary: Event emitted by aggregate delivery
+      contentType: application/json
+      payload:
+        type: object
+        properties:
+          type:
+            type: string
+            const: aggregate
+          account_id:
+            type: string
+            format: uuid
+          channel:
+            type: string
+            enum: [quotes, orders, profit, heartbeat, new_position, ohlc, order_book, tick_value]
+          data:
+            type: object
+            description: Underlying stream payload
+
     PriceAlertMessage:
       name: price_alert
       title: Register Price Alert
@@ -505,7 +712,7 @@ components:
             const: cancel_alert
           alert_id:
             type: string
-            format: uuid
+            example: "pa_70f6078420f145ba9a048e01c0b810c3"
 
     AlertRegisteredEvent:
       name: alert_registered
@@ -520,10 +727,10 @@ components:
             const: alert_registered
           alert_id:
             type: string
-            format: uuid
+            example: "pa_70f6078420f145ba9a048e01c0b810c3"
           alert_type:
             type: string
-            enum: [price_alert, spread_alert, pl_alert]
+            enum: [price_alert, spread_alert, pl_alert, aggregate_feed]
 
     PriceAlertTriggeredEvent:
       name: price_alert_triggered
@@ -541,7 +748,7 @@ components:
             format: uuid
           alert_id:
             type: string
-            format: uuid
+            example: "pa_70f6078420f145ba9a048e01c0b810c3"
           current_ask:
             type: number
             example: 1.09010
@@ -574,7 +781,7 @@ components:
             format: uuid
           alert_id:
             type: string
-            format: uuid
+            example: "sa_70f6078420f145ba9a048e01c0b810c3"
           ask:
             type: number
             example: 1.08560
@@ -607,10 +814,11 @@ components:
             format: uuid
           alert_id:
             type: string
-            format: uuid
+            example: "pl_70f6078420f145ba9a048e01c0b810c3"
           condition:
             type: string
-            example: "below"
+            enum: [equity_above, equity_below, profit_above, profit_below]
+            example: "profit_below"
           current_value:
             type: number
             example: -520.00

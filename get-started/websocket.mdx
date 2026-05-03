@@ -1,6 +1,6 @@
 ---
 title: "WebSocket Guide"
-description: "Real-time quote, order, profit, heartbeat, and alert streaming via WebSocket"
+description: "Real-time quote, order, profit, heartbeat, OHLC, order-book, tick-value, and alert streaming via WebSocket"
 ---
 
 ## Connection
@@ -164,7 +164,7 @@ Register a price alert to trigger when a symbol's price crosses a threshold:
   "account_id": "70f60784-...",
   "symbol": "EURUSD",
   "direction": "above",
-  "target_price": 1.09000
+  "price": 1.09000
 }
 ```
 
@@ -229,8 +229,8 @@ Register a P&L alert to trigger when account profit crosses a threshold:
 {
   "type": "pl_alert",
   "account_id": "70f60784-...",
-  "condition": "below",
-  "threshold": -500.00
+  "condition": "profit_below",
+  "value": -500.00
 }
 ```
 
@@ -241,7 +241,7 @@ Register a P&L alert to trigger when account profit crosses a threshold:
   "type": "pl_alert_triggered",
   "account_id": "70f60784-...",
   "alert_id": "i9j0k1l2-...",
-  "condition": "below",
+  "condition": "profit_below",
   "current_value": -520.00,
   "threshold": -500.00
 }
@@ -260,18 +260,37 @@ Cancel a previously registered alert before it triggers:
 
 ## Aggregate Feed
 
-The `aggregate` channel combines quotes, orders, and profit updates into a single subscription. Useful when you want all event types without multiple subscribe calls:
+Use `subscribe_aggregate` to receive aggregate events for selected stream types across every account owned by the API key. This is separate from the normal per-account `subscribe` message and does not include an `account_id` field.
 
 ```json
 {
-  "type": "subscribe",
-  "channel": "aggregate",
-  "account_id": "70f60784-20f1-45ba-9a04-8e01c0b810c3",
-  "symbols": ["EURUSD", "GBPUSD"]
+  "type": "subscribe_aggregate",
+  "channels": ["orders", "profit"],
+  "interval_ms": 1000
 }
 ```
 
-You will receive `quote`, `order_update`, and `profit` messages on this single subscription, each with the standard `data` wrapper.
+Aggregate events are delivered as:
+
+```json
+{
+  "type": "aggregate",
+  "account_id": "70f60784-...",
+  "channel": "profit",
+  "data": {
+    "equity": 10142.50,
+    "profit": 142.50
+  }
+}
+```
+
+To stop aggregate delivery:
+
+```json
+{
+  "type": "unsubscribe_aggregate"
+}
+```
 
 ## Unsubscribe
 
@@ -295,14 +314,18 @@ Unsubscribe from everything on an account:
 
 ## Available Channels
 
-| Channel | Description | `symbols` required | `interval_ms` default |
+| Stream | Description | `symbols` required | `interval_ms` default |
 |---------|-------------|-------------------|----------------------|
 | `quotes` | Real-time bid/ask ticks | yes | 500ms |
 | `orders` | Order open/modify/close events | no | -- |
 | `profit` | Live equity and P&L | no | 1000ms |
 | `heartbeat` | Account health snapshot | no | 5000ms |
 | `new_position` | New position opened | no | -- |
-| `aggregate` | Combined quotes + orders + profit | yes | 500ms |
+| `ohlc` | Live OHLC candle updates | yes | Uses `interval_ms` as timeframe |
+| `order_book` | Market depth / order book | yes | 500ms |
+| `tick_value` | Tick value updates | yes | 500ms |
+
+Aggregate delivery uses `subscribe_aggregate` with a `channels` array instead of a normal `channel` value.
 
 ## Multi-Account Streaming
 
@@ -408,7 +431,7 @@ ws.onopen = () => {
     account_id: "70f60784-20f1-45ba-9a04-8e01c0b810c3",
     symbol: "EURUSD",
     direction: "above",
-    target_price: 1.09000
+    price: 1.09000
   }));
 };
 
@@ -509,7 +532,7 @@ async def main():
             "account_id": ACCOUNT_ID,
             "symbol": "EURUSD",
             "direction": "above",
-            "target_price": 1.09000
+            "price": 1.09000
         }))
 
         async for message in ws:

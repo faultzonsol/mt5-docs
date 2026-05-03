@@ -130,5 +130,4 @@ ws.onclose = (event) => {
 
 ## Account Ownership
 
-Each API key can manage up to 4 MT5 accounts. Accounts are scoped to the key that created them. Attempting to access another key's account returns `ACCOUNT_NOT_FOUND`.
-
+Each API key has a configurable MT5-account cap. The default is 4 accounts unless your admin grants more. Accounts are scoped to the key that created them, and attempting to access another key's account returns `ACCOUNT_NOT_FOUND`.

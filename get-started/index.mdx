@@ -190,15 +190,18 @@ asyncio.run(main())
 ```
 </CodeGroup>
 
-| Channel | Description | `symbols` required | Default interval |
+| Stream | Description | `symbols` required | Default interval |
 |---------|-------------|:-:|--------|
 | `quotes` | Real-time bid/ask ticks | Yes | 500ms |
 | `orders` | Order open/modify/close events | No | instant |
 | `profit` | Live equity, margin, and P&L | No | 1000ms |
 | `heartbeat` | Account health snapshot | No | 5000ms |
 | `new_position` | New position opened | No | instant |
+| `ohlc` | Live OHLC candle updates | Yes | Uses `interval_ms` as timeframe |
+| `order_book` | Market depth / order book | Yes | 500ms |
+| `tick_value` | Tick value updates | Yes | 500ms |
 
-<Tip>See the full [WebSocket Guide](/get-started/websocket) for alerts, aggregate feed, unsubscribing, and multi-account streaming.</Tip>
+<Tip>See the full [WebSocket Guide](/get-started/websocket) for alerts, aggregate messages, unsubscribing, and multi-account streaming.</Tip>
 
 ## Response Format
 
@@ -232,7 +235,7 @@ Every API response uses this envelope:
 | `ACCOUNT_NOT_FOUND` | 404 | Account ID does not exist |
 | `INVALID_REQUEST` | 400 | Bad request body or params |
 | `ORDER_FAILED` | 422 | Broker rejected the trade |
-| `ACCOUNT_LIMIT_REACHED` | 409 | Max 4 accounts per key |
+| `ACCOUNT_LIMIT_REACHED` | 409 | API-key account cap reached. Default is 4 unless your admin grants more |
 | `CONNECTION_FAILED` | 502 | Could not reach MT5 broker |
 | `SESSION_LOST` | 503 | Broker session dropped |
 | `UPSTREAM_ERROR` | 502 | Broker service error |
@@ -241,9 +244,9 @@ Every API response uses this envelope:
 
 <CardGroup cols={2}>
   <Card title="REST API Reference" icon="bolt" href="/api-reference/accounts/list-accounts">
-    Browse all 40+ endpoints with the interactive playground.
+    Browse all 55+ client endpoints with the interactive playground.
   </Card>
   <Card title="WebSocket Guide" icon="signal-stream" href="/get-started/websocket">
-    Real-time channels, alerts, aggregate feed, and multi-account streaming.
+    Real-time streams, alerts, aggregate messages, and multi-account streaming.
   </Card>
 </CardGroup>
