@@ -94,5 +94,10 @@
       "keywords": "Easier Prop, MT5 API, MetaTrader 5, trading API, WebSocket, prop trading, forex API, order execution"
     }
   },
-  "redirects": []
+  "redirects": [
+    {
+      "source": "/api-reference/admin/seed-first-admin",
+      "destination": "/api-reference/admin/admin-login"
+    }
+  ]
 }
