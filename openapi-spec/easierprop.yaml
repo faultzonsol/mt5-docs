@@ -315,6 +315,85 @@ components:
           type: string
           example: ""
 
+    Deal:
+      type: object
+      description: |
+        A single execution leg as recorded by MT5. Each closed position is
+        represented by an "In" deal (opening) and an "Out" deal (closing),
+        linked by `positionTicket`. Pair them client-side to reconstruct
+        the full trade, or use `/positions/{ticket}/fills` to fetch both
+        legs for a known position in one call.
+      properties:
+        ticket:
+          type: integer
+          format: int64
+          example: 12345678
+        positionTicket:
+          type: integer
+          format: int64
+          description: Ticket of the position this deal belongs to. Use this to pair In/Out deals.
+          example: 87654321
+        type:
+          type: string
+          description: Deal direction. `DealBuy` and `DealSell` are the live legs; `DealBalance` is a balance op.
+          enum: [DealBuy, DealSell, DealBalance, DealCredit, DealCorrection, DealBonus, DealCharge]
+          example: "DealBuy"
+        entry:
+          type: string
+          description: Whether this deal opened, closed, or modified a position.
+          enum: [DealEntryIn, DealEntryOut, DealEntryInOut, DealEntryOutBy]
+          example: "DealEntryIn"
+        symbol:
+          type: string
+          example: "EURUSD"
+        lots:
+          type: number
+          example: 0.01
+        openPrice:
+          type: number
+          description: Execution price of this deal.
+          example: 1.08542
+        profit:
+          type: number
+          example: 3.20
+        swap:
+          type: number
+          example: 0.0
+        commission:
+          type: number
+          example: -0.07
+        fee:
+          type: number
+          example: 0.0
+        comment:
+          type: string
+          example: ""
+        time:
+          type: string
+          description: Deal execution time in `YYYY-MM-DDTHH:mm:ss` (broker timezone).
+          example: "2026-04-01T12:00:00"
+        timestampUTC:
+          type: integer
+          format: int64
+          example: 1711972800
+
+    OrderHistoryResult:
+      type: object
+      description: |
+        Raw mt5rest history payload. Closed positions are not pre-paired —
+        `internalDeals` contains one entry per execution leg (entry/exit).
+        Pair by `positionTicket` to reconstruct trades, or call
+        `/positions/{ticket}/fills` for a specific position.
+      properties:
+        action:
+          type: integer
+          description: mt5rest action code (informational; typically 0).
+          example: 0
+        internalDeals:
+          type: array
+          items:
+            $ref: "#/components/schemas/Deal"
+
     OrderRequest:
       type: object
       required: [symbol, side, type, volume]
@@ -2317,6 +2396,12 @@ paths:
         - `sell` + `stop` = SellStop
         - `buy` + `stop_limit` = BuyStopLimit
         - `sell` + `stop_limit` = SellStopLimit
+
+        **Symbol naming:** symbols are case-sensitive and broker-specific
+        (e.g. `XAUUSD.r` on Raw FP Trading, `XAUUSD` elsewhere). Use
+        `GET /accounts/{id}/symbol-names` to discover the exact strings
+        your broker exposes — mismatches return `422 ORDER_FAILED` with
+        message `"Symbol not found"`.
       security:
         - ApiKeyHeader: []
       requestBody:
@@ -2339,7 +2424,11 @@ paths:
                   data:
                     $ref: "#/components/schemas/Order"
         "422":
-          description: Order rejected by broker
+          description: |
+            Order rejected. Returned for broker rejections (insufficient
+            margin, invalid stops, market closed) and for invalid inputs
+            that mt5rest reports in-band rather than via HTTP status
+            (e.g. unknown symbol — see "Symbol naming" above).
           content:
             application/json:
               schema:
@@ -2399,6 +2488,12 @@ paths:
                     example: true
                   data:
                     $ref: "#/components/schemas/Order"
+        "422":
+          description: Modification rejected by broker (invalid stops, ticket not found, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
     delete:
       operationId: closeOrder
@@ -2425,6 +2520,12 @@ paths:
                     example: true
                   data:
                     $ref: "#/components/schemas/Order"
+        "422":
+          description: Close rejected by broker (ticket not found, market closed, etc.)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /api/accounts/{id}/orders/history:
     parameters:
@@ -2434,25 +2535,38 @@ paths:
         required: true
         schema:
           type: string
-        description: "Start datetime (YYYY-MM-DDTHH:mm:ss)"
+        description: |
+          Start datetime in `YYYY-MM-DDTHH:mm:ss` (broker timezone).
+          ISO-8601 inputs from `Date.toISOString()` (with trailing `.SSSZ`)
+          are accepted — the gateway normalizes them. Malformed values
+          return `400 INVALID_REQUEST` instead of an empty result.
         example: "2026-01-01T00:00:00"
       - name: to
         in: query
         required: true
         schema:
           type: string
-        description: "End datetime (YYYY-MM-DDTHH:mm:ss)"
+        description: "End datetime (`YYYY-MM-DDTHH:mm:ss`). Same normalization rules as `from`."
         example: "2026-04-01T23:59:59"
     get:
       operationId: orderHistory
       tags: [Trading]
       summary: Order history
-      description: Returns closed orders within a date range.
+      description: |
+        Returns the raw mt5rest history payload for the given date range.
+        Closed positions are returned as a list of `Deal` entries inside
+        `data.internalDeals` — each deal is one execution leg (entry or
+        exit), linked to its position via `positionTicket`.
+
+        To reconstruct full closed trades, pair In/Out deals by
+        `positionTicket` client-side, or call
+        `GET /accounts/{id}/positions/{ticket}/fills` for a single position
+        to fetch both legs in one call.
       security:
         - ApiKeyHeader: []
       responses:
         "200":
-          description: Closed orders
+          description: Order history payload
           content:
             application/json:
               schema:
@@ -2462,9 +2576,13 @@ paths:
                     type: boolean
                     example: true
                   data:
-                    type: array
-                    items:
-                      $ref: "#/components/schemas/Order"
+                    $ref: "#/components/schemas/OrderHistoryResult"
+        "400":
+          description: Invalid date format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   # ════════════════════════════════════════════════════════════════════
   #  ACCOUNT INFO
@@ -3227,12 +3345,15 @@ paths:
       operationId: orderHistoryPaginated
       tags: [Enhanced]
       summary: Paginated order history
-      description: Returns closed orders within a date range with pagination support.
+      description: |
+        Returns the raw mt5rest history payload with pagination. Same
+        `Deal`-based shape as `/orders/history` — pair entries by
+        `positionTicket` to reconstruct closed trades.
       security:
         - ApiKeyHeader: []
       responses:
         "200":
-          description: Paginated order list
+          description: Paginated order history payload
           content:
             application/json:
               schema:
@@ -3242,7 +3363,13 @@ paths:
                     type: boolean
                     example: true
                   data:
-                    type: object
+                    $ref: "#/components/schemas/OrderHistoryResult"
+        "400":
+          description: Invalid date format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /api/accounts/{id}/orders/history/pending:
     parameters:
@@ -3281,6 +3408,12 @@ paths:
                     type: array
                     items:
                       $ref: "#/components/schemas/Order"
+        "400":
+          description: Invalid date format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /api/copy-trade:
     post:
@@ -3446,18 +3579,24 @@ paths:
         required: true
         schema:
           type: string
-        description: "Start datetime (YYYY-MM-DDTHH:mm:ss)"
+        description: |
+          Start datetime in `YYYY-MM-DDTHH:mm:ss` (broker timezone).
+          `Date.toISOString()` output (with `.SSSZ` suffix) is accepted —
+          the gateway normalizes it. Malformed values return `400`.
       - name: to
         in: query
         required: true
         schema:
           type: string
-        description: "End datetime (YYYY-MM-DDTHH:mm:ss)"
+        description: "End datetime (`YYYY-MM-DDTHH:mm:ss`). Same normalization rules as `from`."
     get:
       operationId: closedPositions
       tags: [Extended]
       summary: Closed positions
-      description: Get positions closed within a date range.
+      description: |
+        Returns positions closed within the given date range. Each item is
+        a fully-paired closed position (open + close legs reconciled by
+        mt5rest). For raw In/Out deals see `/orders/history`.
       security:
         - ApiKeyHeader: []
       responses:
@@ -3475,6 +3614,12 @@ paths:
                     type: array
                     items:
                       type: object
+        "400":
+          description: Invalid date format
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
   /api/accounts/{id}/positions/history:
     parameters:
