@@ -62,7 +62,7 @@ curl -X POST https://api.easierprop.com/api/accounts \
 }
 ```
 
-<Note>Credentials are encrypted at rest with AES-256-GCM. The password is never returned in API responses.</Note>
+<Note>Credentials are encrypted at rest with AES-256-GCM. The password is not echoed by the account CRUD endpoints — only by the read-only `GET /api/accounts/{id}/details`, for credential-verification flows.</Note>
 
 ## Step 2: Connect to the Broker
 

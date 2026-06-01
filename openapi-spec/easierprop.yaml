@@ -3,10 +3,12 @@ info:
   title: Easier Prop REST API
   version: 2.1.0
   description: |
-    MT5 Trading Infrastructure API. Manage multiple broker accounts, execute trades, stream market data, and administer API keys, admins, usage, and billing terms.
+    MT5 Trading Infrastructure API. Manage multiple broker accounts, execute trades, stream market data, and administer API keys, usage snapshots, and billing terms.
 
     **Client API** endpoints live under `/api` and require an `X-API-Key` header.
     **Admin API** endpoints live under `/admin` and accept either a JWT `Authorization: Bearer <jwt>` (obtained via `/admin/login`) or the same `X-API-Key` header used by client endpoints.
+
+    Admin user provisioning is read-only via REST: `GET /admin/admins` lists admins, but creation, update, and deletion are performed out-of-band (DB / ops tooling). Bootstrap a brand-new deployment with `POST /admin/seed` while no superadmin exists.
 
 servers:
   - url: https://api.easierprop.com
@@ -521,6 +523,14 @@ components:
         isInvestor:
           type: boolean
           example: false
+        password:
+          type: string
+          example: ""
+          description: |
+            MT5 master password echoed by the upstream broker bridge. Returned
+            on this gateway endpoint; downstream EasierProp tenant routes
+            (`/t/{slug}/api/mt5/{accountId}/details`) scrub this field unless
+            the caller opts in with `?reveal_password=true`.
         port:
           type: integer
           example: 443
